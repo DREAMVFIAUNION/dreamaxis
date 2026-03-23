@@ -1,0 +1,12 @@
+{
+  "slug": "typescript-runtime",
+  "name": "TypeScript Runtime",
+  "version": "1.0.0",
+  "description": "Builtin web runtime notes for the frontend stack.",
+  "documents": [
+    {
+      "path": "docs/typescript-runtime.md",
+      "title": "TypeScript Runtime"
+    }
+  ]
+}

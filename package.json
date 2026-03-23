@@ -1,0 +1,17 @@
+{
+  "name": "dreamaxis",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "turbo run format",
+    "dev:web": "pnpm --filter @dreamaxis/web dev",
+    "build:web": "pnpm --filter @dreamaxis/web build"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.5"
+  }
+}

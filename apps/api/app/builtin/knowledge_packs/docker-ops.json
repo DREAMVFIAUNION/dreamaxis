@@ -1,0 +1,12 @@
+{
+  "slug": "docker-ops",
+  "name": "Docker Operations",
+  "version": "1.0.0",
+  "description": "Builtin docker orchestration notes.",
+  "documents": [
+    {
+      "path": "docs/docker-ops.md",
+      "title": "Docker Operations"
+    }
+  ]
+}

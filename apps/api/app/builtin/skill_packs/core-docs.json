@@ -1,0 +1,82 @@
+{
+  "slug": "core-docs",
+  "name": "Core Docs",
+  "version": "1.1.0",
+  "description": "Documentation drafting, release writing, and architecture explanation skills.",
+  "tool_capabilities": [
+    "draft_docs",
+    "summarize_changes"
+  ],
+  "skills": [
+    {
+      "name": "Architecture Changelog",
+      "slug": "architecture-changelog",
+      "description": "Turn raw implementation notes into a concise architecture changelog.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "archivist",
+      "prompt_template": "Rewrite the following implementation notes into a clean architecture changelog with sections for summary, changed systems, and follow-up work:\n\n{input}",
+      "knowledge_scope": [
+        "dreamaxis-architecture",
+        "fastapi-notes",
+        "nextjs-notes"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": []
+    },
+    {
+      "name": "README Polisher",
+      "slug": "readme-polisher",
+      "description": "Turn rough project notes into a cleaner README section with stronger structure and concise wording.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "archivist",
+      "prompt_template": "Rewrite the following project notes into a polished README section. Keep the structure clear, concise, and useful for GitHub readers.\n\nInput:\n\n{input}",
+      "knowledge_scope": [
+        "dreamaxis-architecture",
+        "nextjs-notes",
+        "typescript-runtime"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": []
+    },
+    {
+      "name": "Release Notes Draft",
+      "slug": "release-notes-draft",
+      "description": "Convert raw change notes into release notes with highlights, notable changes, and boundaries.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "archivist",
+      "prompt_template": "Draft release notes from the following raw notes. Include sections for highlights, shipped capabilities, and known boundaries.\n\nInput:\n\n{input}",
+      "knowledge_scope": [
+        "dreamaxis-architecture",
+        "fastapi-notes",
+        "nextjs-notes"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": []
+    },
+    {
+      "name": "Issue Triage Summary",
+      "slug": "issue-triage-summary",
+      "description": "Summarize a bug or feature issue into a maintainer-friendly triage note with area, impact, and next action.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "sentinel",
+      "prompt_template": "Turn the following issue notes into a triage summary with sections for problem, likely area, impact, and recommended next action.\n\nInput:\n\n{input}",
+      "knowledge_scope": [
+        "dreamaxis-architecture"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": []
+    }
+  ]
+}

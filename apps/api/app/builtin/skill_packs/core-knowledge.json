@@ -1,0 +1,29 @@
+{
+  "slug": "core-knowledge",
+  "name": "Core Knowledge",
+  "version": "1.0.0",
+  "description": "Knowledge-aware prompting skills for workspace and builtin packs.",
+  "tool_capabilities": [
+    "rag",
+    "knowledge_summary"
+  ],
+  "skills": [
+    {
+      "name": "Knowledge Summary",
+      "slug": "knowledge-summary",
+      "description": "Summarize relevant workspace and builtin knowledge into an action-oriented answer.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "archivist",
+      "prompt_template": "Using the available knowledge sources, summarize the following topic and extract the most actionable insights:\n\n{input}",
+      "knowledge_scope": [
+        "workspace-docs",
+        "builtin-packs"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "python"
+      ],
+      "workspace_requirements": []
+    }
+  ]
+}

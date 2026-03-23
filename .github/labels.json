@@ -1,0 +1,97 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something is not working as expected"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New feature or improvement"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Docs or writing changes"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057ff",
+    "description": "A good issue for new contributors"
+  },
+  {
+    "name": "help wanted",
+    "color": "008672",
+    "description": "Maintainers would welcome outside help"
+  },
+  {
+    "name": "question",
+    "color": "d876e3",
+    "description": "Further clarification is needed"
+  },
+  {
+    "name": "needs reproduction",
+    "color": "fbca04",
+    "description": "Needs a confirmed reproduction path"
+  },
+  {
+    "name": "blocked",
+    "color": "b60205",
+    "description": "Blocked by another issue or missing dependency"
+  },
+  {
+    "name": "p0",
+    "color": "b60205",
+    "description": "Highest priority"
+  },
+  {
+    "name": "p1",
+    "color": "d93f0b",
+    "description": "High priority"
+  },
+  {
+    "name": "p2",
+    "color": "fbca04",
+    "description": "Normal priority"
+  },
+  {
+    "name": "area:web",
+    "color": "1d76db",
+    "description": "Next.js web application"
+  },
+  {
+    "name": "area:api",
+    "color": "0052cc",
+    "description": "FastAPI backend"
+  },
+  {
+    "name": "area:runtime-cli",
+    "color": "0e8a16",
+    "description": "CLI runtime host and session flow"
+  },
+  {
+    "name": "area:runtime-browser",
+    "color": "0e8a16",
+    "description": "Browser runtime and Playwright flow"
+  },
+  {
+    "name": "area:skills",
+    "color": "5319e7",
+    "description": "Skill packs and skill execution"
+  },
+  {
+    "name": "area:knowledge",
+    "color": "5319e7",
+    "description": "Knowledge packs, uploads, and retrieval"
+  },
+  {
+    "name": "area:docs",
+    "color": "006b75",
+    "description": "Documentation, guides, and release materials"
+  },
+  {
+    "name": "area:auth",
+    "color": "c5def5",
+    "description": "Auth mode, bootstrap, and session behavior"
+  }
+]

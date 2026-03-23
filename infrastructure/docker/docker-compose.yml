@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: dreamaxis
+      POSTGRES_PASSWORD: dreamaxis
+      POSTGRES_DB: dreamaxis
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dreamaxis -d dreamaxis"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      AUTH_MODE: ${AUTH_MODE:-local_open}
+      DATABASE_URL: postgresql+asyncpg://dreamaxis:dreamaxis@postgres:5432/dreamaxis
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: change-me-dreamaxis-development-secret
+      RUNTIME_SHARED_TOKEN: ${RUNTIME_SHARED_TOKEN:-dreamaxis-runtime-token}
+      ENABLE_BROWSER_RUNTIME: ${ENABLE_BROWSER_RUNTIME:-true}
+      WORKSPACE_ROOT_BASE: /workspace
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://web:3000,http://host.docker.internal:3000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
+      KNOWLEDGE_STORAGE_PATH: /data/knowledge
+      KNOWLEDGE_TOP_K: ${KNOWLEDGE_TOP_K:-4}
+      KNOWLEDGE_CHUNK_SIZE: ${KNOWLEDGE_CHUNK_SIZE:-1200}
+      KNOWLEDGE_CHUNK_OVERLAP: ${KNOWLEDGE_CHUNK_OVERLAP:-150}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - api_knowledge_data:/data
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      API_BASE_URL: http://api:8000
+      RUNTIME_SHARED_TOKEN: ${RUNTIME_SHARED_TOKEN:-dreamaxis-runtime-token}
+      WORKER_PUBLIC_URL: http://worker:8100
+      WORKER_SCOPE_REF_ID: workspace-main
+      WORKER_REPO_ROOT: /workspace
+      WORKER_SHELL: pwsh
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - ../..:/workspace:ro
+    ports:
+      - "8100:8100"
+
+  browser-worker:
+    build:
+      context: ../..
+      dockerfile: apps/browser-worker/Dockerfile
+    environment:
+      API_BASE_URL: http://api:8000
+      RUNTIME_SHARED_TOKEN: ${RUNTIME_SHARED_TOKEN:-dreamaxis-runtime-token}
+      BROWSER_WORKER_PUBLIC_URL: http://browser-worker:8200
+      BROWSER_WORKER_SCOPE_REF_ID: workspace-main
+      BROWSER_WORKER_HEADLESS: true
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8200:8200"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+      INTERNAL_API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_knowledge_data:

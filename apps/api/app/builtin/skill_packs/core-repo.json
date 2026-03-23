@@ -1,0 +1,132 @@
+{
+  "slug": "core-repo",
+  "name": "Core Repo",
+  "version": "1.1.0",
+  "description": "Repository scanning, dependency inspection, and test/build runbook skills.",
+  "tool_capabilities": [
+    "exec_command",
+    "test_run",
+    "dependency_inspect"
+  ],
+  "skills": [
+    {
+      "name": "Repo Health",
+      "slug": "repo-health",
+      "description": "Inspect package manifests and top-level structure to summarize repository health.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem package.json, pnpm-workspace.yaml, turbo.json -ErrorAction SilentlyContinue | Format-Table Name,Length,LastWriteTime",
+      "working_directory": ".",
+      "agent_role_slug": "builder",
+      "tool_capabilities": [
+        "exec_command",
+        "read_file"
+      ],
+      "knowledge_scope": [
+        "dreamaxis-architecture",
+        "typescript-runtime"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git",
+        "node",
+        "package_manager"
+      ],
+      "workspace_requirements": [
+        "safe_root",
+        "node_project"
+      ]
+    },
+    {
+      "name": "Package Script Inventory",
+      "slug": "package-script-inventory",
+      "description": "Inspect package manifests across the workspace and build a script inventory starting point.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem -Recurse -Filter package.json | Select-Object -ExpandProperty FullName",
+      "working_directory": ".",
+      "agent_role_slug": "builder",
+      "tool_capabilities": [
+        "exec_command",
+        "read_file",
+        "dependency_inspect"
+      ],
+      "knowledge_scope": [
+        "typescript-runtime",
+        "nextjs-notes"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "node",
+        "package_manager"
+      ],
+      "workspace_requirements": [
+        "safe_root",
+        "node_project"
+      ]
+    },
+    {
+      "name": "Git Diff Stat",
+      "slug": "git-diff-stat",
+      "description": "Show a compact git diff stat for the current working tree.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "git diff --stat",
+      "working_directory": ".",
+      "agent_role_slug": "builder",
+      "tool_capabilities": [
+        "exec_command"
+      ],
+      "knowledge_scope": [
+        "git-playbook"
+      ],
+      "required_capabilities": [
+        "git",
+        "python"
+      ],
+      "recommended_capabilities": [
+        "node"
+      ],
+      "workspace_requirements": [
+        "safe_root",
+        "workspace_repo"
+      ]
+    },
+    {
+      "name": "Test Surface Check",
+      "slug": "test-surface-check",
+      "description": "Search for common test files to estimate the repository's current test surface.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem -Recurse -Include *.test.*,*.spec.*,tests -ErrorAction SilentlyContinue | Select-Object -First 100 FullName",
+      "working_directory": ".",
+      "agent_role_slug": "analyst",
+      "tool_capabilities": [
+        "exec_command",
+        "test_run"
+      ],
+      "knowledge_scope": [
+        "typescript-runtime",
+        "python-notes"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git",
+        "node"
+      ],
+      "workspace_requirements": [
+        "safe_root"
+      ]
+    }
+  ]
+}

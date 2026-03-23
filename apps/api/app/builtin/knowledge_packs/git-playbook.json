@@ -1,0 +1,12 @@
+{
+  "slug": "git-playbook",
+  "name": "Git Playbook",
+  "version": "1.0.0",
+  "description": "Builtin git inspection and repo hygiene notes.",
+  "documents": [
+    {
+      "path": "docs/git-playbook.md",
+      "title": "Git Playbook"
+    }
+  ]
+}

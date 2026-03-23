@@ -1,0 +1,30 @@
+[project]
+name = "dreamaxis-api"
+version = "0.1.0"
+description = "DreamAxis FastAPI backend"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14.1",
+  "asyncpg>=0.30.0",
+  "email-validator>=2.2.0",
+  "fastapi>=0.116.0",
+  "greenlet>=3.1.1",
+  "httpx>=0.28.1",
+  "openai>=1.95.1",
+  "passlib[bcrypt]>=1.7.4",
+  "pgvector>=0.3.6",
+  "pydantic-settings>=2.10.1",
+  "pypdf>=5.9.0",
+  "python-jose[cryptography]>=3.5.0",
+  "python-multipart>=0.0.20",
+  "redis>=6.4.0",
+  "sqlalchemy>=2.0.41",
+  "uvicorn[standard]>=0.35.0"
+]
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

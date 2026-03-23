@@ -1,0 +1,485 @@
+export type ID = string;
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+export type AuthMode = "local_open" | "password" | string;
+
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  meta: {
+    total: number;
+  };
+}
+
+export interface User {
+  id: ID;
+  email: string;
+  full_name: string;
+}
+
+export interface AppConfig {
+  auth_mode: AuthMode;
+  default_workspace_id?: ID | null;
+  runtime_types: string[];
+  feature_flags: Record<string, boolean>;
+  environment_profile?: EnvironmentProfile | null;
+}
+
+export interface EnvironmentCapability {
+  name: string;
+  installed: boolean;
+  version?: string | null;
+  required: boolean;
+  status: "ready" | "degraded" | "missing" | string;
+  source: string;
+  message?: string | null;
+  install_hint?: string | null;
+}
+
+export interface EnvironmentSummary {
+  status: "ready" | "degraded" | "missing" | string;
+  ready_count: number;
+  degraded_count: number;
+  missing_count: number;
+  missing_required: string[];
+  warnings: string[];
+}
+
+export interface EnvironmentProfile {
+  slug: string;
+  name: string;
+  required_capabilities: string[];
+  optional_capabilities: string[];
+  workspace_capabilities: string[];
+  default_shell?: string | null;
+}
+
+export interface WorkspaceEnvironmentStatus {
+  workspace_id: ID;
+  workspace_name: string;
+  root_path?: string | null;
+  status: "ready" | "degraded" | "missing" | string;
+  capabilities: EnvironmentCapability[];
+  summary: EnvironmentSummary;
+}
+
+export interface CapabilityRequirement {
+  name: string;
+  scope: "machine" | "workspace" | string;
+  required: boolean;
+  reason?: string | null;
+}
+
+export interface SkillCompatibilityStatus {
+  status: "ready" | "warn" | "blocked" | string;
+  message?: string | null;
+  missing_required_capabilities: string[];
+  missing_workspace_requirements: string[];
+  missing_recommended_capabilities: string[];
+}
+
+export interface RuntimeDoctorSnapshot {
+  runtime_id: ID;
+  runtime_name: string;
+  runtime_type: string;
+  status: string;
+  doctor_status?: string | null;
+  last_capability_check_at?: string | null;
+}
+
+export interface DoctorCheckResult {
+  profile: EnvironmentProfile;
+  default_workspace_id?: ID | null;
+  machine_capabilities: EnvironmentCapability[];
+  machine_summary: EnvironmentSummary;
+  workspace?: WorkspaceEnvironmentStatus | null;
+  runtimes: RuntimeDoctorSnapshot[];
+  install_guidance: string[];
+  skill_compatibility: Record<string, number>;
+}
+
+export interface EnvironmentOverview {
+  profile: EnvironmentProfile;
+  default_workspace_id?: ID | null;
+  runtime_types: string[];
+  runtimes: RuntimeDoctorSnapshot[];
+}
+
+export interface Workspace {
+  id: ID;
+  name: string;
+  slug: string;
+  description?: string | null;
+  owner_id: ID;
+  workspace_root_path?: string | null;
+  default_provider_id?: ID | null;
+  default_model_id?: ID | null;
+  default_provider_connection_id?: ID | null;
+  default_model_name?: string | null;
+  default_embedding_model_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationModelBinding {
+  provider_connection_id?: ID | null;
+  provider_connection_name?: string | null;
+  model_name?: string | null;
+}
+
+export interface Conversation extends ConversationModelBinding {
+  id: ID;
+  workspace_id: ID;
+  title: string;
+  created_by_id: ID;
+  provider_id?: ID | null;
+  model_id?: ID | null;
+  use_knowledge: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeChunkReference {
+  document_id: ID;
+  document_name: string;
+  chunk_id: ID;
+  excerpt: string;
+  score: number;
+}
+
+export interface Message {
+  id: ID;
+  conversation_id: ID;
+  runtime_execution_id?: ID | null;
+  role: "system" | "user" | "assistant";
+  content: string;
+  sources_json?: KnowledgeChunkReference[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Provider {
+  id: ID;
+  slug: string;
+  name: string;
+  type: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Model {
+  id: ID;
+  provider_id: ID;
+  slug: string;
+  name: string;
+  kind: "chat" | "embedding" | string;
+  context_window: number;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProviderConnectionStatus =
+  | "active"
+  | "pending"
+  | "requires_config"
+  | "manual_entry_required"
+  | "error"
+  | "disabled"
+  | string;
+
+export interface MaskedSecretMeta {
+  masked_value?: string | null;
+  configured: boolean;
+}
+
+export interface DiscoveredModel {
+  name: string;
+  kind: "chat" | "embedding" | string;
+  source: "discovered" | "manual" | string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ProviderConnection {
+  id: ID;
+  user_id: ID;
+  provider_id?: ID | null;
+  provider_type: string;
+  name: string;
+  base_url: string;
+  model_discovery_mode: string;
+  status: ProviderConnectionStatus;
+  is_enabled: boolean;
+  default_model_name?: string | null;
+  default_embedding_model_name?: string | null;
+  secret: MaskedSecretMeta;
+  models: DiscoveredModel[];
+  last_checked_at?: string | null;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderConnectionTestResult {
+  ok: boolean;
+  status: ProviderConnectionStatus;
+  message: string;
+  last_checked_at?: string | null;
+  discovered_model_count: number;
+}
+
+export interface KnowledgeDocument {
+  id: ID;
+  workspace_id: ID;
+  file_name: string;
+  title?: string | null;
+  file_type: string;
+  status: "processing" | "ready" | "failed" | string;
+  source_type: "user_upload" | "builtin_pack" | "git_repo" | "web_capture" | string;
+  source_ref?: string | null;
+  knowledge_pack_slug?: string | null;
+  storage_path: string;
+  content_length: number;
+  chunk_count: number;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgePack {
+  id: ID;
+  workspace_id: ID;
+  slug: string;
+  name: string;
+  version: string;
+  description: string;
+  source_type: string;
+  source_ref?: string | null;
+  manifest_path?: string | null;
+  is_builtin: boolean;
+  status: string;
+  last_synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeSource {
+  id: ID;
+  kind: string;
+  title: string;
+  source_ref?: string | null;
+  pack_slug?: string | null;
+}
+
+export interface SkillDefinition extends ConversationModelBinding {
+  id: ID;
+  workspace_id: ID;
+  name: string;
+  slug: string;
+  description: string;
+  prompt_template: string;
+  input_schema?: Record<string, unknown> | null;
+  tool_capabilities?: string[] | Record<string, unknown> | null;
+  knowledge_scope?: string[] | Record<string, unknown> | null;
+  required_capabilities?: string[] | null;
+  recommended_capabilities?: string[] | null;
+  workspace_requirements?: string[] | null;
+  enabled: boolean;
+  skill_mode: SkillExecutionMode;
+  required_runtime_type?: string | null;
+  session_mode: "new" | "reuse" | string;
+  command_template?: string | null;
+  working_directory?: string | null;
+  agent_role_slug?: string | null;
+  pack_slug?: string | null;
+  pack_version?: string | null;
+  is_builtin: boolean;
+  provider_id?: ID | null;
+  model_id?: ID | null;
+  allow_model_override: boolean;
+  use_knowledge: boolean;
+  compatibility?: SkillCompatibilityStatus | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SkillPack {
+  id: ID;
+  workspace_id: ID;
+  slug: string;
+  name: string;
+  version: string;
+  description: string;
+  source_type: string;
+  source_ref?: string | null;
+  manifest_path?: string | null;
+  is_builtin: boolean;
+  status: string;
+  tool_capabilities_json?: string[] | Record<string, unknown> | null;
+  last_synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SkillExecutionMode = "prompt" | "cli" | "browser" | string;
+
+export interface RuntimeHost {
+  id: ID;
+  name: string;
+  runtime_type: "cli" | "browser" | string;
+  endpoint_url: string;
+  capabilities_json?: Record<string, unknown> | null;
+  scope_type: string;
+  scope_ref_id: ID;
+  status: "online" | "online_ready" | "online_degraded" | "offline" | "degraded" | string;
+  doctor_status?: "ready" | "degraded" | "missing" | string | null;
+  last_error?: string | null;
+  last_heartbeat_at?: string | null;
+  last_capability_check_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RuntimeSessionContext {
+  cwd?: string | null;
+  shell?: string | null;
+  env_whitelist?: string[] | null;
+  repo_root?: string | null;
+  last_command_at?: string | null;
+}
+
+export interface RuntimeSession {
+  id: ID;
+  session_type: "cli" | "browser" | string;
+  runtime_id: ID;
+  runtime_name?: string | null;
+  workspace_id: ID;
+  created_by_id: ID;
+  status: "idle" | "busy" | "closed" | "error" | string;
+  reusable: boolean;
+  context_json?: RuntimeSessionContext | null;
+  last_activity_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CliExecutionResult {
+  runtime_id: ID;
+  runtime_session_id: ID;
+  command: string;
+  cwd?: string | null;
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  duration_ms?: number | null;
+  artifacts_json?: Record<string, unknown> | Array<Record<string, unknown>> | null;
+}
+
+export interface BrowserExecutionArtifact {
+  kind: string;
+  name?: string;
+  mime_type?: string;
+  data_url?: string;
+  tabs?: Array<Record<string, unknown>>;
+}
+
+export interface BrowserExecutionResult {
+  runtime_id: ID;
+  runtime_session_id: ID;
+  actions: Array<Record<string, unknown>>;
+  current_url?: string | null;
+  title?: string | null;
+  extracted_text: string;
+  duration_ms?: number | null;
+  artifacts_json?: BrowserExecutionArtifact[] | Record<string, unknown> | null;
+}
+
+export interface AgentRole {
+  slug: string;
+  name: string;
+  system_prompt: string;
+  allowed_skill_modes?: SkillExecutionMode[] | null;
+  allowed_runtime_types?: string[] | null;
+  default_model_binding?: Record<string, unknown> | null;
+  default_skill_pack_slugs?: string[] | null;
+  default_knowledge_pack_slugs?: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RuntimeExecution {
+  id: ID;
+  workspace_id: ID;
+  conversation_id?: ID | null;
+  skill_id?: ID | null;
+  runtime_id?: ID | null;
+  runtime_name?: string | null;
+  runtime_session_id?: ID | null;
+  provider_id?: ID | null;
+  model_id?: ID | null;
+  provider_connection_id?: ID | null;
+  provider_connection_name?: string | null;
+  user_id: ID;
+  source: "chat" | "skill" | string;
+  execution_kind: "chat" | "skill_prompt" | "skill_cli" | "skill_browser" | string;
+  status: "queued" | "running" | "succeeded" | "failed" | string;
+  prompt_preview?: string | null;
+  command_preview?: string | null;
+  response_preview?: string | null;
+  error_message?: string | null;
+  resolved_model_name?: string | null;
+  resolved_base_url?: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  duration_ms?: number | null;
+  artifacts_json?: Record<string, unknown> | Array<Record<string, unknown>> | null;
+  details_json?: Record<string, unknown> | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModelUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
+}
+
+export interface MessageCreateInput {
+  conversation_id: ID;
+  content: string;
+  use_knowledge?: boolean;
+}
+
+export interface SkillRunInput {
+  workspace_id: ID;
+  conversation_id?: ID;
+  variables?: Record<string, string>;
+  use_knowledge?: boolean;
+}
+
+export interface SkillRunResult {
+  conversation: Conversation;
+  execution: RuntimeExecution;
+  user_message: Message;
+  assistant_message: Message;
+}
+
+export interface StreamEvent {
+  event: "message_start" | "delta" | "finish" | "error" | "done";
+  data: Record<string, unknown>;
+}

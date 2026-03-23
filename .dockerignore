@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.next
+.turbo
+dist
+.git
+__pycache__
+*.pyc
+.venv

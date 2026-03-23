@@ -1,0 +1,15 @@
+node_modules
+.pnpm-store
+.next
+.turbo
+artifacts
+.env
+.env.local
+*.pyc
+__pycache__/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+.DS_Store

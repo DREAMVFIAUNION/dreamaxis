@@ -1,0 +1,12 @@
+{
+  "slug": "nextjs-notes",
+  "name": "Next.js Notes",
+  "version": "1.0.0",
+  "description": "Builtin frontend notes for the app router shell.",
+  "documents": [
+    {
+      "path": "docs/nextjs-notes.md",
+      "title": "Next.js Notes"
+    }
+  ]
+}

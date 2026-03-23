@@ -1,0 +1,2 @@
+# DreamAxis Architecture
+DreamAxis is a local-first execution platform with provider configuration, chat, knowledge, skills, CLI runtime, and browser runtime layers. Skill packs and knowledge packs are synced into the local workspace and stored in the user-owned database.

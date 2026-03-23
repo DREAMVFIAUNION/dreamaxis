@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: dreamaxis-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-compile:
+    name: Python compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e apps/api
+          python -m pip install -e apps/worker
+          python -m pip install -e apps/browser-worker
+
+      - name: Compile backend and workers
+        run: |
+          python -m compileall apps/api/app apps/worker/app apps/browser-worker/app scripts/reset-local-demo.py
+
+  web-build:
+    name: Web build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --config.node-linker=hoisted
+
+      - name: Build web app
+        run: pnpm --filter @dreamaxis/web build
+
+  docker-smoke:
+    name: Docker smoke
+    runs-on: ubuntu-latest
+    needs:
+      - python-compile
+      - web-build
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start stack
+        run: docker compose -f infrastructure/docker/docker-compose.yml up -d --build
+
+      - name: Wait for API health
+        shell: bash
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8000/health > /tmp/dreamaxis-health.json; then
+              cat /tmp/dreamaxis-health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "API health check did not become ready in time."
+          exit 1
+
+      - name: Wait for web shell
+        shell: bash
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3000 > /tmp/dreamaxis-web.html; then
+              if grep -qi "dreamaxis" /tmp/dreamaxis-web.html; then
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "Web app did not become ready in time."
+          exit 1
+
+      - name: Bootstrap local session
+        id: bootstrap
+        shell: bash
+        run: |
+          BOOTSTRAP_JSON=$(curl -fsS -X POST http://localhost:8000/api/v1/auth/bootstrap)
+          echo "$BOOTSTRAP_JSON" > /tmp/dreamaxis-bootstrap.json
+          TOKEN=$(python -c "import json, pathlib; payload=json.loads(pathlib.Path('/tmp/dreamaxis-bootstrap.json').read_text(encoding='utf-8')); print(payload['data']['access_token'])")
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Verify app config and runtime registry
+        env:
+          DREAMAXIS_TOKEN: ${{ steps.bootstrap.outputs.token }}
+        shell: bash
+        run: |
+          APP_CONFIG=$(curl -fsS http://localhost:8000/api/v1/app-config)
+          echo "$APP_CONFIG" > /tmp/dreamaxis-app-config.json
+          python -c "import json, pathlib; payload=json.loads(pathlib.Path('/tmp/dreamaxis-app-config.json').read_text(encoding='utf-8')); data=payload['data']; assert data['auth_mode']=='local_open', data; assert 'cli' in data['runtime_types'], data; assert 'browser' in data['runtime_types'], data"
+
+          for i in {1..40}; do
+            if curl -fsS -H "Authorization: Bearer $DREAMAXIS_TOKEN" http://localhost:8000/api/v1/runtimes > /tmp/dreamaxis-runtimes.json; then
+              if python -c "import json, pathlib; payload=json.loads(pathlib.Path('/tmp/dreamaxis-runtimes.json').read_text(encoding='utf-8')); items=payload['data']; types={item['runtime_type']: item['status'] for item in items}; assert types.get('cli')=='online', types; assert types.get('browser')=='online', types"
+              then
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+
+          echo "Runtime registry did not report online CLI + Browser workers in time."
+          exit 1
+
+      - name: Show compose status
+        if: always()
+        run: docker compose -f infrastructure/docker/docker-compose.yml ps
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f infrastructure/docker/docker-compose.yml logs --no-color
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f infrastructure/docker/docker-compose.yml down -v

@@ -1,0 +1,12 @@
+{
+  "slug": "python-notes",
+  "name": "Python Notes",
+  "version": "1.0.0",
+  "description": "Builtin Python service implementation notes.",
+  "documents": [
+    {
+      "path": "docs/python-notes.md",
+      "title": "Python Notes"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "slug": "fastapi-notes",
+  "name": "FastAPI Notes",
+  "version": "1.0.0",
+  "description": "Builtin API implementation notes.",
+  "documents": [
+    {
+      "path": "docs/fastapi-notes.md",
+      "title": "FastAPI Notes"
+    }
+  ]
+}

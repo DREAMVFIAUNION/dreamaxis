@@ -1,0 +1,2 @@
+# Playwright Runtime
+Use browser runtime skills to open URLs, click selectors, type text, wait for state changes, extract visible text, and capture screenshots as artifacts. Keep flows deterministic and prefer stable selectors.

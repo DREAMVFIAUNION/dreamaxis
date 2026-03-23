@@ -1,0 +1,29 @@
+{
+  "slug": "core-research",
+  "name": "Core Research",
+  "version": "1.0.0",
+  "description": "Prompt-based research and summarization skills.",
+  "tool_capabilities": [
+    "summarize",
+    "compare",
+    "synthesize"
+  ],
+  "skills": [
+    {
+      "name": "Incident Brief",
+      "slug": "incident-brief",
+      "description": "Summarize an operational incident into summary, impact, and next steps.",
+      "skill_mode": "prompt",
+      "agent_role_slug": "analyst",
+      "prompt_template": "Create an incident brief for the following situation:\n\n{input}\n\nReturn summary, impact, and next actions.",
+      "knowledge_scope": [
+        "dreamaxis-architecture"
+      ],
+      "required_capabilities": [],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": []
+    }
+  ]
+}

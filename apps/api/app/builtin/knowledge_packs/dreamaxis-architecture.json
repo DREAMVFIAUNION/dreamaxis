@@ -1,0 +1,12 @@
+{
+  "slug": "dreamaxis-architecture",
+  "name": "DreamAxis Architecture",
+  "version": "1.0.0",
+  "description": "Builtin overview of the DreamAxis execution platform.",
+  "documents": [
+    {
+      "path": "docs/dreamaxis-architecture.md",
+      "title": "DreamAxis Architecture"
+    }
+  ]
+}

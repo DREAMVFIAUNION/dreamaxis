@@ -1,0 +1,184 @@
+{
+  "slug": "core-cli",
+  "name": "Core CLI",
+  "version": "1.1.0",
+  "description": "Safe local repository, environment, and workspace inspection skills.",
+  "tool_capabilities": [
+    "exec_command",
+    "list_dir",
+    "read_file"
+  ],
+  "skills": [
+    {
+      "name": "Repo Snapshot",
+      "slug": "repo-snapshot",
+      "description": "List the current workspace directory for a fast repo snapshot.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem -Force",
+      "working_directory": ".",
+      "agent_role_slug": "operator",
+      "tool_capabilities": [
+        "exec_command",
+        "list_dir"
+      ],
+      "knowledge_scope": [
+        "dreamaxis-architecture"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git",
+        "node"
+      ],
+      "workspace_requirements": [
+        "safe_root"
+      ]
+    },
+    {
+      "name": "Git Status",
+      "slug": "git-status",
+      "description": "Inspect current git status for the workspace repository.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "git status --short --branch",
+      "working_directory": ".",
+      "agent_role_slug": "builder",
+      "tool_capabilities": [
+        "exec_command"
+      ],
+      "knowledge_scope": [
+        "git-playbook"
+      ],
+      "required_capabilities": [
+        "git",
+        "python"
+      ],
+      "recommended_capabilities": [
+        "node"
+      ],
+      "workspace_requirements": [
+        "safe_root",
+        "workspace_repo"
+      ]
+    },
+    {
+      "name": "Docker Services",
+      "slug": "docker-services",
+      "description": "Inspect running docker services from inside the workspace runtime.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "new",
+      "command_template": "docker ps --format \"table {{.Names}}\t{{.Status}}\t{{.Ports}}\"",
+      "working_directory": ".",
+      "agent_role_slug": "operator",
+      "tool_capabilities": [
+        "exec_command"
+      ],
+      "knowledge_scope": [
+        "docker-ops"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "docker"
+      ],
+      "workspace_requirements": [
+        "safe_root",
+        "docker_project"
+      ]
+    },
+    {
+      "name": "Workspace Search",
+      "slug": "workspace-search",
+      "description": "Search the workspace for a text pattern using PowerShell Select-String.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem -Recurse -File | Select-String -Pattern \"{pattern}\" | Select-Object -First 50",
+      "working_directory": ".",
+      "agent_role_slug": "builder",
+      "tool_capabilities": [
+        "exec_command",
+        "read_file"
+      ],
+      "knowledge_scope": [
+        "typescript-runtime",
+        "python-notes"
+      ],
+      "input_schema": {
+        "pattern": {
+          "type": "string",
+          "label": "Search pattern"
+        }
+      },
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": [
+        "safe_root"
+      ]
+    },
+    {
+      "name": "README Preview",
+      "slug": "readme-preview",
+      "description": "Preview the top section of the workspace README for quick orientation.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-Content README.md -TotalCount 80",
+      "working_directory": ".",
+      "agent_role_slug": "archivist",
+      "tool_capabilities": [
+        "exec_command",
+        "read_file"
+      ],
+      "knowledge_scope": [
+        "dreamaxis-architecture"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": [
+        "safe_root"
+      ]
+    },
+    {
+      "name": "Top Level Inventory",
+      "slug": "top-level-inventory",
+      "description": "List the top-level workspace directories and files for a fast environment snapshot.",
+      "skill_mode": "cli",
+      "required_runtime_type": "cli",
+      "session_mode": "reuse",
+      "command_template": "Get-ChildItem -Force | Format-Table Mode,LastWriteTime,Length,Name",
+      "working_directory": ".",
+      "agent_role_slug": "operator",
+      "tool_capabilities": [
+        "exec_command",
+        "list_dir"
+      ],
+      "knowledge_scope": [
+        "dreamaxis-architecture"
+      ],
+      "required_capabilities": [
+        "python"
+      ],
+      "recommended_capabilities": [
+        "git"
+      ],
+      "workspace_requirements": [
+        "safe_root"
+      ]
+    }
+  ]
+}

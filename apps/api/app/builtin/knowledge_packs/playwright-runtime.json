@@ -1,0 +1,12 @@
+{
+  "slug": "playwright-runtime",
+  "name": "Playwright Runtime",
+  "version": "1.0.0",
+  "description": "Builtin notes for browser runtime and Playwright-style execution.",
+  "documents": [
+    {
+      "path": "docs/playwright-runtime.md",
+      "title": "Playwright Runtime"
+    }
+  ]
+}
