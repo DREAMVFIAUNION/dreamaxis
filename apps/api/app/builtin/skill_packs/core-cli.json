@@ -44,7 +44,7 @@
       "skill_mode": "cli",
       "required_runtime_type": "cli",
       "session_mode": "reuse",
-      "command_template": "git status --short --branch",
+      "command_template": "git -c core.safecrlf=false status --short --branch",
       "working_directory": ".",
       "agent_role_slug": "builder",
       "tool_capabilities": [

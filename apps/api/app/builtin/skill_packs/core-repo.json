@@ -78,7 +78,7 @@
       "skill_mode": "cli",
       "required_runtime_type": "cli",
       "session_mode": "reuse",
-      "command_template": "git diff --stat",
+      "command_template": "git -c core.safecrlf=false diff --stat",
       "working_directory": ".",
       "agent_role_slug": "builder",
       "tool_capabilities": [
