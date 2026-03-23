@@ -6,6 +6,7 @@ import type { ChatExecutionTrace, ChatMode, Conversation, DiscoveredModel, Knowl
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
 import { ChatComposer, type ChatModeSelection } from "@/components/chat/chat-composer";
+import { ChatExecutionBundle } from "@/components/chat/chat-execution-bundle";
 import { StreamMessage } from "@/components/chat/stream-message";
 import { ExecutionTimeline } from "@/components/execution/execution-timeline";
 import { apiClient } from "@/lib/api";
@@ -34,6 +35,11 @@ function tone(value?: string | null) {
 
 function modeLabel(mode?: ChatMode | null) {
   return mode ? mode.replaceAll("_", " ") : "Auto";
+}
+
+function traceFromRuntimeExecution(execution?: RuntimeExecution | null) {
+  if (!execution?.details_json || typeof execution.details_json !== "object") return null;
+  return toTrace((execution.details_json as Record<string, unknown>).execution_trace);
 }
 
 export function ChatScreen({ conversationId }: { conversationId: string }) {
@@ -100,7 +106,7 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const ordered = useMemo(() => [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at)), [messages]);
   const latestRuntime = runtime[0] ?? null;
   const latestChatRuntime = useMemo(() => runtime.find((item) => item.execution_kind === "chat") ?? null, [runtime]);
-  const selectedTrace = useMemo(() => lastTrace ?? toTrace(latestChatRuntime?.details_json && (latestChatRuntime.details_json as Record<string, unknown>).execution_trace), [lastTrace, latestChatRuntime]);
+  const selectedTrace = useMemo(() => lastTrace ?? traceFromRuntimeExecution(latestChatRuntime), [lastTrace, latestChatRuntime]);
   const runtimeIndex = useMemo(() => new Map(runtime.map((item) => [item.id, item])), [runtime]);
   const currentMode = selectedTrace?.mode_summary?.active_mode ?? (chatMode === "auto" ? undefined : chatMode);
   const selectedConnection = connections.find((item) => item.id === selectedConnectionId) ?? null;
@@ -170,8 +176,28 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
           </header>
 
           <div className="flex flex-col gap-4">
-            {ordered.map((message) => <StreamMessage key={message.id} role={message.role} content={message.content} sources={message.sources_json ?? null} />)}
-            {pending ? <StreamMessage role="assistant" content={streamBuffer || "Awaiting model deltas..."} pending sources={lastSources} /> : null}
+            {ordered.map((message) => {
+              const runtimeExecution = message.runtime_execution_id ? runtimeIndex.get(message.runtime_execution_id) ?? null : null;
+              const trace = traceFromRuntimeExecution(runtimeExecution);
+              return (
+                <StreamMessage
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                  sources={message.sources_json ?? null}
+                  details={message.role === "assistant" && trace ? <ChatExecutionBundle trace={trace} runtimeIndex={runtimeIndex} parentExecutionId={message.runtime_execution_id} /> : null}
+                />
+              );
+            })}
+            {pending ? (
+              <StreamMessage
+                role="assistant"
+                content={streamBuffer || "Awaiting model deltas..."}
+                pending
+                sources={lastSources}
+                details={lastTrace ? <ChatExecutionBundle trace={lastTrace} runtimeIndex={runtimeIndex} parentExecutionId={latestChatRuntime?.id ?? null} /> : null}
+              />
+            ) : null}
           </div>
 
           {selectedTrace ? <PanelCard eyebrow="Current turn" title={selectedTrace.trace_summary?.headline ?? "Execution bundle"}>
@@ -181,14 +207,19 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
                 <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(selectedTrace.trace_summary?.status)}`}>Bundle / {selectedTrace.execution_bundle_id ?? latestChatRuntime?.id ?? "--"}</span>
                 <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(readiness(selectedTrace))}`}>Readiness / {readiness(selectedTrace)}</span>
               </div>
-              <div className="grid gap-5 xl:grid-cols-2">
-                <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Intent / plan</p><ul className="mt-3 space-y-2 text-sm leading-7 text-ink">{selectedTrace.intent_plan.map((item) => <li key={item}>- {item}</li>)}</ul></div>
-                <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Recommended next step</p><ul className="mt-3 space-y-2 text-sm leading-7 text-ink">{(selectedTrace.recommended_next_actions ?? []).map((item) => <li key={item.label}>- {item.label}{item.reason ? <span className="text-mutedInk"> - {item.reason}</span> : null}</li>)}</ul></div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Timeline</p>
+                <div className="mt-3">
+                  <ExecutionTimeline
+                    items={selectedTrace.actual_events ?? selectedTrace.timeline ?? []}
+                    emptyCopy="Send a repo-focused prompt to generate a visible execution lane."
+                    resolveArtifacts={(item) => {
+                      const r = item.runtime_execution_id ? runtimeIndex.get(item.runtime_execution_id) : null;
+                      return Array.isArray(r?.artifacts_json) ? (r.artifacts_json as Array<Record<string, unknown>>) : [];
+                    }}
+                  />
+                </div>
               </div>
-              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">What ran</p><div className="mt-3"><ExecutionTimeline items={selectedTrace.actual_events ?? selectedTrace.timeline ?? []} emptyCopy="Send a repo-focused prompt to generate a visible execution lane." resolveArtifacts={(item) => { const r = item.runtime_execution_id ? runtimeIndex.get(item.runtime_execution_id) : null; return Array.isArray(r?.artifacts_json) ? (r.artifacts_json as Array<Record<string, unknown>>) : []; }} /></div></div>
-              {(selectedTrace.steps ?? []).filter((step) => step.runtime_execution_id).map((step) => <div key={step.runtime_execution_id} className="border border-white/5 bg-black/25 px-4 py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-ink">{step.title}</p><p className="mt-1 text-xs uppercase tracking-[0.18em] text-mutedInk">{step.kind} / {step.status}</p></div>{step.runtime_execution_id ? <Link href={`/runtime?execution=${step.runtime_execution_id}`} className="text-[10px] uppercase tracking-[0.18em] text-signal">Open runtime</Link> : null}</div><div className="mt-3 grid gap-2 text-xs text-mutedInk md:grid-cols-2"><p>target: {step.current_url ?? (typeof step.command_preview === "string" ? step.command_preview : step.command_preview ? JSON.stringify(step.command_preview) : "--")}</p><p>exit: {step.exit_code ?? "--"}</p><p>session: {step.runtime_session_id ?? "--"}</p><p>artifacts: {step.artifact_summaries?.length ?? 0}</p></div>{step.output_excerpt ? <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-ink">{step.output_excerpt}</pre> : null}</div>)}
-              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">What was found</p><div className="mt-3 space-y-3">{(selectedTrace.evidence_items ?? selectedTrace.evidence ?? []).map((item) => <div key={`${item.title}-${item.runtime_execution_id ?? item.content}`} className="border border-white/5 bg-black/30 px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold text-ink">{item.title}</p><span className="text-[10px] uppercase tracking-[0.18em] text-signal">{item.type}</span></div><p className="mt-2 text-xs leading-6 text-mutedInk">{item.content}</p>{item.stderr_excerpt ? <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{item.stderr_excerpt}</pre> : null}</div>)}</div></div>
-              {selectedTrace.proposal ? <div className="border border-white/5 bg-black/25 px-4 py-4"><div className="flex items-center justify-between gap-3"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Proposal output</p><span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span></div><p className="mt-3 text-sm leading-7 text-ink">{selectedTrace.proposal.summary}</p><div className="mt-4 grid gap-4 xl:grid-cols-2"><div><p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files</p><ul className="mt-2 space-y-2 text-xs leading-6 text-ink">{selectedTrace.proposal.targets.map((target) => <li key={`${target.file_path}-${target.reason}`}>- {target.file_path}<span className="text-mutedInk"> - {target.reason}</span></li>)}</ul></div><div><p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Suggested commands</p><ul className="mt-2 space-y-2 text-xs leading-6 text-ink">{selectedTrace.proposal.suggested_commands.map((command) => <li key={command}>- {command}</li>)}</ul></div></div>{selectedTrace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{selectedTrace.proposal.patch_summary}</p> : null}</div> : null}
             </div>
           </PanelCard> : null}
 

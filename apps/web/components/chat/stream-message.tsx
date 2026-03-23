@@ -8,11 +8,13 @@ export function StreamMessage({
   content,
   pending = false,
   sources,
+  details,
 }: {
   role: MessageRole;
   content: string;
   pending?: boolean;
   sources?: KnowledgeChunkReference[] | null;
+  details?: React.ReactNode;
 }) {
   return (
     <article
@@ -26,6 +28,7 @@ export function StreamMessage({
         {pending ? <span className="text-[10px] uppercase tracking-[0.3em] text-mutedInk">streaming</span> : null}
       </div>
       <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
+      {details ? <div className="border-t border-white/5 pt-3">{details}</div> : null}
       {sources?.length ? (
         <div className="border-t border-white/5 pt-3">
           <p className="text-[10px] uppercase tracking-[0.24em] text-mutedInk">Knowledge sources</p>
