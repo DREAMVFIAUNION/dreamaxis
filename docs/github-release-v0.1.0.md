@@ -119,6 +119,11 @@ This release focuses on a strong base:
 - [screenshots.md](./screenshots.md)
 - [ROADMAP.md](../ROADMAP.md)
 
+## Screenshot note
+
+- README visuals should reference tracked canonical assets under `docs/assets/readme/`
+- Release assets can keep shipping the latest acceptance screenshots as downloadable attachments
+
 ## Thanks
 
 This release is the start of a more open execution platform:

@@ -94,4 +94,8 @@ Builtin packs currently include:
 
 ### Screenshots
 
+README screenshots should point at tracked canonical assets under `docs/assets/readme/`.
+
+Release assets can continue attaching the latest exported acceptance screenshots for download and sharing.
+
 See [screenshots.md](./screenshots.md).

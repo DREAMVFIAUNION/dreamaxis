@@ -2,7 +2,10 @@ node_modules
 .pnpm-store
 .next
 .turbo
+# local acceptance/build outputs
 artifacts
+
+# tracked public docs/readme assets live under docs/assets/
 .env
 .env.local
 *.pyc
