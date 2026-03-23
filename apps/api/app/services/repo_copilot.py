@@ -316,24 +316,120 @@ def _build_trace_steps(search_term: str | None) -> list[PlannedStep]:
     ]
 
 
+def _build_verify_manifest_probe() -> PlannedStep:
+    return PlannedStep(
+        kind="cli",
+        title="Verification manifest probe",
+        summary="Inspect repo markers, package manager signals, and available scripts before choosing verification commands.",
+        command=(
+            "$hasPackageJson = Test-Path package.json; "
+            "$hasPnpmLock = Test-Path pnpm-lock.yaml; "
+            "$hasPackageLock = Test-Path package-lock.json; "
+            "$hasPyproject = Test-Path pyproject.toml; "
+            "$hasRequirements = (Test-Path requirements.txt) -or (Test-Path requirements-dev.txt) -or (Test-Path setup.py); "
+            "$packageManager = if ($hasPnpmLock) { 'pnpm' } elseif ($hasPackageLock) { 'npm' } elseif ($hasPackageJson) { 'npm' } else { 'none' }; "
+            "$scripts = @(); "
+            "if ($hasPackageJson) { "
+            "  try { "
+            "    $pkg = Get-Content package.json -Raw | ConvertFrom-Json; "
+            "    if ($pkg.scripts) { $scripts = $pkg.scripts.PSObject.Properties.Name } "
+            "  } catch { $scripts = @('__parse_error__') } "
+            "} "
+            "[pscustomobject]@{ "
+            "  package_json = $hasPackageJson; "
+            "  pnpm_lock = $hasPnpmLock; "
+            "  package_lock = $hasPackageLock; "
+            "  package_manager = $packageManager; "
+            "  scripts = ($scripts -join ', '); "
+            "  pyproject = $hasPyproject; "
+            "  python_markers = $hasRequirements "
+            "} | Format-List"
+        ),
+        working_directory=".",
+    )
+
+
+def _node_script_probe_command(script_name: str) -> str:
+    return (
+        "$hasPackageJson = Test-Path package.json; "
+        f"$scriptName = '{script_name}'; "
+        "if (-not $hasPackageJson) { Write-Output 'SKIP: No package.json detected for a Node verification probe.'; exit 0 } "
+        "try { $pkg = Get-Content package.json -Raw | ConvertFrom-Json } "
+        "catch { Write-Output 'SKIP: package.json could not be parsed for script discovery.'; exit 0 } "
+        "$scripts = @(); "
+        "if ($pkg.scripts) { $scripts = $pkg.scripts.PSObject.Properties.Name } "
+        "if (-not ($scripts -contains $scriptName)) { Write-Output ('SKIP: package.json has no ' + $scriptName + ' script.'); exit 0 } "
+        "$pnpm = Get-Command pnpm -ErrorAction SilentlyContinue; "
+        "$npm = Get-Command npm -ErrorAction SilentlyContinue; "
+        "if ((Test-Path pnpm-lock.yaml) -and $pnpm) { "
+        "  Write-Output ('Running pnpm ' + $scriptName + ' because pnpm-lock.yaml is present.'); "
+        "  & pnpm $scriptName; "
+        "} elseif ($npm) { "
+        "  Write-Output ('Running npm run ' + $scriptName + ' as the available fallback.'); "
+        "  & npm run $scriptName --if-present; "
+        "} else { "
+        "  Write-Output 'SKIP: Neither pnpm nor npm is available in PATH.'; "
+        "  exit 0 "
+        "}"
+    )
+
+
+def _python_test_probe_command() -> str:
+    return (
+        "$hasPythonProject = (Test-Path pyproject.toml) -or (Test-Path requirements.txt) -or (Test-Path requirements-dev.txt) -or (Test-Path setup.py); "
+        "if (-not $hasPythonProject) { Write-Output 'SKIP: No Python project markers detected.'; exit 0 } "
+        "$python = Get-Command python -ErrorAction SilentlyContinue; "
+        "if (-not $python) { Write-Output 'SKIP: Python is not available in PATH.'; exit 0 } "
+        "$hasPytestConfig = (Test-Path pytest.ini) -or (Test-Path pyproject.toml) -or (Test-Path tox.ini); "
+        "$hasTestsDir = Test-Path tests; "
+        "$hasTestFiles = [bool](Get-ChildItem -Recurse -File -Include 'test_*.py','*_test.py' -ErrorAction SilentlyContinue | Select-Object -First 1); "
+        "if (-not ($hasPytestConfig -or $hasTestsDir -or $hasTestFiles)) { "
+        "  Write-Output 'SKIP: Python project detected but no pytest markers or tests were found.'; "
+        "  exit 0 "
+        "} "
+        "Write-Output 'Running python -m pytest -q because Python test markers were detected.'; "
+        "& python -m pytest -q"
+    )
+
+
 def _build_verify_steps(prompt: str, browser_url: str | None) -> list[PlannedStep]:
     lowered = prompt.lower()
-    steps: list[PlannedStep] = []
+    steps: list[PlannedStep] = [_build_verify_manifest_probe()]
+    wants_tests = "test" in lowered or "pytest" in lowered
     if any(token in lowered for token in ["lint", "build", "check", "verify", "run"]):
         steps.extend(
             [
                 PlannedStep(
                     kind="cli",
                     title="Lint probe",
-                    summary="Run a safe lint probe if the workspace exposes a lint script.",
-                    command="npm run lint --if-present",
+                    summary="Run a repo-aware lint probe using the detected package manager when a lint script exists.",
+                    command=_node_script_probe_command("lint"),
                     working_directory=".",
                 ),
                 PlannedStep(
                     kind="cli",
                     title="Build probe",
-                    summary="Run a safe build probe if the workspace exposes a build script.",
-                    command="npm run build --if-present",
+                    summary="Run a repo-aware build probe using the detected package manager when a build script exists.",
+                    command=_node_script_probe_command("build"),
+                    working_directory=".",
+                ),
+            ]
+        )
+    if wants_tests:
+        steps.extend(
+            [
+                PlannedStep(
+                    kind="cli",
+                    title="Test probe",
+                    summary="Run a repo-aware Node test probe when a test script exists.",
+                    command=_node_script_probe_command("test"),
+                    working_directory=".",
+                ),
+                PlannedStep(
+                    kind="cli",
+                    title="Python test probe",
+                    summary="Run a Python test probe when Python project markers and pytest-style tests are present.",
+                    command=_python_test_probe_command(),
                     working_directory=".",
                 ),
             ]
@@ -368,8 +464,8 @@ def _build_troubleshooting_steps(prompt: str, search_term: str | None, browser_u
             PlannedStep(
                 kind="cli",
                 title="Lint replay",
-                summary="Replay lint to reproduce the reported failure surface.",
-                command="npm run lint --if-present",
+                summary="Replay lint with repo-aware package-manager detection to reproduce the reported failure surface.",
+                command=_node_script_probe_command("lint"),
                 working_directory=".",
             )
         )
@@ -378,8 +474,8 @@ def _build_troubleshooting_steps(prompt: str, search_term: str | None, browser_u
             PlannedStep(
                 kind="cli",
                 title="Build replay",
-                summary="Replay build to gather fresh failure output.",
-                command="npm run build --if-present",
+                summary="Replay build with repo-aware package-manager detection to gather fresh failure output.",
+                command=_node_script_probe_command("build"),
                 working_directory=".",
             )
         )
@@ -388,8 +484,17 @@ def _build_troubleshooting_steps(prompt: str, search_term: str | None, browser_u
             PlannedStep(
                 kind="cli",
                 title="Test replay",
-                summary="Replay tests with a safe npm probe when available.",
-                command="npm run test --if-present",
+                summary="Replay tests with repo-aware Node script detection when available.",
+                command=_node_script_probe_command("test"),
+                working_directory=".",
+            )
+        )
+        steps.append(
+            PlannedStep(
+                kind="cli",
+                title="Python test replay",
+                summary="Replay Python tests when pytest-style markers are present.",
+                command=_python_test_probe_command(),
                 working_directory=".",
             )
         )
