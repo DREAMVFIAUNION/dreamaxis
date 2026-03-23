@@ -43,13 +43,21 @@ Use this checklist before publishing or refreshing the public GitHub repository.
 - [ ] `/skills` loads and can run a Browser skill
 - [ ] `/knowledge` can sync builtin packs
 - [ ] `/chat/local-demo` streams successfully
+- [ ] `/chat` shows visible mode, workspace/model/readiness badges, and evidence-backed sections
+- [ ] `verify` mode returns runtime-backed evidence with execution cards and artifact summaries
+- [ ] `propose_fix` stays proposal-only and marks that nothing was applied
 - [ ] `/runtime` shows executions and artifacts
+- [ ] `/runtime` shows execution bundle, parent/child linkage, and jump-back to the source conversation
+- [ ] `docs/chat-acceptance-report-v0.2.md` is current
+- [ ] `docs/chat-acceptance-report-nvidia.md` is current
 
 ## Assets
 
 - [ ] logo/favicon assets are committed
 - [ ] acceptance screenshots are up to date
 - [ ] sample screenshots match the current UI
+- [ ] `docs/assets/readme/dreamaxis-chat.png` reflects the current chat-first repo copilot UI
+- [ ] `docs/assets/readme/dreamaxis-runtime.png` reflects the current runtime control plane UI
 
 ## Optional polish
 

@@ -21,23 +21,30 @@ Already in place:
 - runtime/session/execution visibility
 - GitHub-ready community scaffolding
 
-## Next major track: v0.2.x operator usefulness
+## Next major track: v0.2.x repo copilot usefulness
 
 Focus:
 
-- better builtin skill coverage
+- chat as a true repo copilot entrypoint
+- safe chat-to-runtime orchestration
+- scenario-based validation against real repositories
+- clearer execution evidence in chat and runtime
 - stronger browser actions and artifacts
-- richer knowledge ingestion
-- improved provider/model UX
-- more polished runtime observability
+- repo-aware verification and troubleshooting depth
 
 Candidate work:
 
-- browser extract/selector ergonomics
+- repo onboarding / readiness / trace / verification / troubleshooting runbooks
+- better retry and fallback behavior in chat
 - repo and docs skill pack expansion
-- better retry/error surfaces in chat and runtime
-- more importable pack examples
+- browser extract and selector ergonomics
 - improved runtime artifact previews
+- package-manager-aware verify routing
+- stronger failure summarization and proposal-only repair plans
+
+Detailed plan:
+
+- `docs/v0.2-next-round-plan.md`
 
 ## v0.3.x execution platform maturity
 

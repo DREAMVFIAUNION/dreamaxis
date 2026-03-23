@@ -68,3 +68,8 @@ Try to keep screenshots:
 - based on seeded demo data
 - free of raw secrets or provider error payloads
 - visually aligned with the current README narrative
+
+Latest refresh notes:
+
+- `2026-03-23`: `dreamaxis-chat.png` refreshed from the v0.2 verify lane acceptance pass
+- `2026-03-23`: `dreamaxis-runtime.png` refreshed from the v0.2 runtime control plane after bundle-aware acceptance

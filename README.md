@@ -42,6 +42,28 @@ DreamAxis is designed around four simple defaults:
 - **runtime-centric** - use CLI and browser execution, not just chat text
 - **self-hosted assets** - keep provider keys, skills, knowledge, and workspace data under your control
 
+## Verified acceptance status
+
+Latest local acceptance baseline:
+
+- **v0.2 chat-first repo copilot:** `8/8` scenarios passed
+- **NVIDIA Build provider validation:** `9/9` scenarios passed
+- validated across:
+  - DreamAxis
+  - a Node.js repo
+  - a Python repo
+- focused on:
+  - visible chat modes
+  - verify / troubleshoot flows
+  - proposal-only repair output
+  - runtime-backed evidence and parent/child execution linkage
+
+See:
+
+- [docs/chat-acceptance-report-v0.2.md](./docs/chat-acceptance-report-v0.2.md)
+- [docs/chat-acceptance-report-nvidia.md](./docs/chat-acceptance-report-nvidia.md)
+- [docs/repo-copilot-runbook.md](./docs/repo-copilot-runbook.md)
+
 ## Screenshots
 
 ### Dashboard
