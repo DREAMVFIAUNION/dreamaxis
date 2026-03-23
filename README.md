@@ -1,6 +1,4 @@
-﻿# DreamAxis
-
-<p align="center">
+﻿<p align="center">
   <img src="docs/assets/readme/dreamaxis-icon.png" alt="DreamAxis logo" width="112" />
 </p>
 
@@ -226,5 +224,6 @@ DreamAxis does **not** require a hosted account system for the default path.
 ## License
 
 DreamAxis is released under the [MIT License](./LICENSE).
+
 
 
