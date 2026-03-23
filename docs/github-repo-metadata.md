@@ -12,6 +12,10 @@ Use this file when configuring the repository About section and launch materials
 
 > Local-first open-source agent execution platform with CLI runtime, Browser runtime, skill packs, and knowledge packs.
 
+### Recommended with stronger positioning
+
+> Local-first open-source agent execution platform for self-hosted AI workflows with CLI + Browser runtimes, skill packs, and knowledge packs.
+
 ### Shorter
 
 > Local-first agent execution platform with CLI/Browser runtimes, skill packs, and knowledge packs.
@@ -47,6 +51,22 @@ Recommended GitHub topics:
 ## One-paragraph repo pitch
 
 DreamAxis is a local-first, open-source agent execution platform for self-hosted AI workflows. It combines OpenAI-compatible provider connections, CLI and Browser runtimes, syncable skill packs, and reusable knowledge packs into a single operator control center. The default path requires no public signup, keeps keys self-hosted, and focuses on real execution instead of chat alone.
+
+## Positioning guardrails
+
+Prefer language that frames DreamAxis as:
+
+- local-first
+- runtime-centric
+- no-signup by default
+- self-hosted for keys and data
+- more open than black-box hosted AI tooling
+
+Avoid describing DreamAxis as:
+
+- another chatbot
+- a SaaS copilot
+- a fully autonomous multi-agent OS
 
 ## README opener options
 

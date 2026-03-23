@@ -17,6 +17,14 @@ These are the stable, repo-tracked files that should remain safe for:
 - long-lived documentation
 - future release note references
 
+Recommended README order:
+
+1. `dreamaxis-dashboard.png`
+2. `dreamaxis-skills.png`
+3. `dreamaxis-runtime.png`
+4. `dreamaxis-knowledge.png`
+5. `dreamaxis-chat.png`
+
 ## Acceptance source screenshots
 
 Fresh UI acceptance captures are still generated locally in:
@@ -28,6 +36,12 @@ Fresh UI acceptance captures are still generated locally in:
 - `artifacts/acceptance/dreamaxis-runtime.png`
 
 Because `artifacts/` stays gitignored, those files are **not** the source used by the public README.
+
+These acceptance exports are the preferred source for:
+
+- GitHub release assets
+- social launch visuals
+- community post attachments
 
 ## Current mapping
 

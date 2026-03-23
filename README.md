@@ -1,4 +1,4 @@
-# DreamAxis
+﻿# DreamAxis
 
 <p align="center">
   <img src="docs/assets/readme/dreamaxis-icon.png" alt="DreamAxis logo" width="112" />
@@ -35,6 +35,15 @@ DreamAxis is built for operators and builders who want:
 - a stronger local baseline aligned with modern desktop coding assistants:
   **Git + Node.js + pnpm/npm + Python**
 
+## The core promise
+
+DreamAxis is designed around four simple defaults:
+
+- **local-first** - run on your own machine and infrastructure first
+- **no-signup by default** - the main path starts with `AUTH_MODE=local_open`
+- **runtime-centric** - use CLI and browser execution, not just chat text
+- **self-hosted assets** - keep provider keys, skills, knowledge, and workspace data under your control
+
 ## Screenshots
 
 ### Dashboard
@@ -56,6 +65,26 @@ DreamAxis is built for operators and builders who want:
 | Builtin packs, uploaded documents, and retrieval-ready assets. | Streaming conversations backed by providers, runtime history, and knowledge context. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
+
+## What you can do with it
+
+### Run locally
+
+- bootstrap directly into the app with `local_open`
+- use Docker for the full stack or run services separately
+- validate machine and workspace readiness from `/environment`
+
+### Bring your own model gateway
+
+- configure your own OpenAI-compatible base URL and API key
+- sync available models or enter a model manually
+- keep provider secrets self-hosted in your own deployment
+
+### Execute via CLI + Browser
+
+- run CLI skills against your local workspace
+- run Playwright-backed browser skills and capture artifacts
+- review runtime hosts, sessions, executions, and outputs in one place
 
 ## What makes it different
 
@@ -137,6 +166,8 @@ docker compose -f infrastructure/docker/docker-compose.yml up --build
 - Web: [http://localhost:3000](http://localhost:3000)
 - API health: [http://localhost:8000/health](http://localhost:8000/health)
 
+For the full development setup, non-Docker workflow, and reset instructions, see [docs/development.md](./docs/development.md).
+
 ## First-run flow
 
 1. Enter directly with `local_open`
@@ -181,6 +212,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/knowledge-packs.md](./docs/knowledge-packs.md)
 - [docs/backend-api.md](./docs/backend-api.md)
 - [docs/skill-requirements.md](./docs/skill-requirements.md)
+- [docs/launch/README.md](./docs/launch/README.md)
 - [ROADMAP.md](./ROADMAP.md)
 - [CHANGELOG.md](./CHANGELOG.md)
 
@@ -194,3 +226,5 @@ DreamAxis does **not** require a hosted account system for the default path.
 ## License
 
 DreamAxis is released under the [MIT License](./LICENSE).
+
+
