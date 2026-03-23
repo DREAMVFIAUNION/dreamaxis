@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ntpath
 from pathlib import Path
+import re
 
 from fastapi import HTTPException
 
@@ -43,13 +45,31 @@ def validate_cli_command(command: str) -> str:
     return normalized
 
 
-def resolve_workspace_path(workspace_root: str, working_directory: str | None) -> Path:
+def _is_windows_path(value: str) -> bool:
+    return bool(re.match(r"^[a-zA-Z]:[\\/]", value))
+
+
+def _normalize_windows_path(value: str) -> str:
+    return ntpath.normpath(value.replace("/", "\\"))
+
+
+def resolve_workspace_path(workspace_root: str, working_directory: str | None) -> str:
+    if _is_windows_path(workspace_root):
+        root = _normalize_windows_path(workspace_root)
+        candidate = root if not working_directory else working_directory
+        resolved = _normalize_windows_path(candidate if _is_windows_path(candidate) else ntpath.join(root, candidate))
+        normalized_root = ntpath.normcase(root)
+        normalized_resolved = ntpath.normcase(resolved)
+        if normalized_resolved != normalized_root and not normalized_resolved.startswith(f"{normalized_root}\\"):
+            raise HTTPException(status_code=400, detail="Working directory must stay inside the workspace root")
+        return resolved
+
     root = Path(workspace_root).resolve()
     candidate = root if not working_directory else Path(working_directory)
     resolved = (root / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
     if resolved != root and root not in resolved.parents:
         raise HTTPException(status_code=400, detail="Working directory must stay inside the workspace root")
-    return resolved
+    return str(resolved)
 
 
 def ensure_runtime_type(required_runtime_type: str | None, expected: str = "cli") -> None:

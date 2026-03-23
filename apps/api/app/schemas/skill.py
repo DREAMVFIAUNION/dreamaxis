@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.conversation import ConversationOut
 from app.schemas.environment import SkillCompatibilityStatus
@@ -41,6 +41,12 @@ class SkillDefinitionOut(TimestampedModel):
     model_name: str | None = None
     allow_model_override: bool
     use_knowledge: bool
+    chat_callable: bool = False
+    chat_modes: list[str] = Field(default_factory=list)
+    safety_level: str = "advisory"
+    scenario_tags: list[str] = Field(default_factory=list)
+    is_read_only: bool = True
+    supports_proposal_output: bool = False
     compatibility: SkillCompatibilityStatus | None = None
 
 

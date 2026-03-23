@@ -3,12 +3,14 @@ import type {
   AgentRole,
   AppConfig,
   ApiResponse,
+  ChatExecutionTrace,
   DoctorCheckResult,
   BrowserExecutionResult,
   CliExecutionResult,
   Conversation,
   DiscoveredModel,
   EnvironmentOverview,
+  ExecutionAnnotation,
   KnowledgeDocument,
   KnowledgePack,
   LoginResponse,
@@ -20,8 +22,10 @@ import type {
   ProviderConnection,
   ProviderConnectionTestResult,
   RuntimeExecution,
+  RuntimeExecutionTimeline,
   RuntimeHost,
   RuntimeSession,
+  RuntimeSessionEvent,
   SkillDefinition,
   SkillPack,
   SkillRunInput,
@@ -230,7 +234,21 @@ export function createApiClient(baseUrl?: string) {
         headers: { Authorization: `Bearer ${token}` },
       }),
     sendMessage: (token: string, payload: MessageCreateInput) =>
-      request<ApiResponse<{ user_message: Message; assistant_message: Message; runtime_execution_id: string }>>("/api/v1/messages", {
+      request<
+        ApiResponse<{
+          user_message: Message;
+          assistant_message: Message;
+          runtime_execution_id: string;
+          runtime_execution_ids: string[];
+          execution_trace?: ChatExecutionTrace | null;
+          execution_bundle_id?: string | null;
+          evidence_items?: ChatExecutionTrace["evidence"];
+          proposal?: ChatExecutionTrace["proposal"];
+          workspace_readiness?: ChatExecutionTrace["workspace_readiness"];
+          recommended_next_actions?: ChatExecutionTrace["recommended_next_actions"];
+          mode?: ChatExecutionTrace["mode"];
+        }>
+      >("/api/v1/messages", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
@@ -397,6 +415,29 @@ export function createApiClient(baseUrl?: string) {
       request<ApiResponse<RuntimeExecution>>(`/api/v1/runtime-executions/${executionId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
+    getRuntimeExecutionTimeline: (token: string, executionId: string) =>
+      request<ApiResponse<RuntimeExecutionTimeline>>(`/api/v1/runtime-executions/${executionId}/timeline`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    getRuntimeSessionEvents: (token: string, runtimeSessionId: string) =>
+      request<PaginatedResponse<RuntimeSessionEvent>>(`/api/v1/runtime-sessions/${runtimeSessionId}/events`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    getLogEvents: (
+      token: string,
+      params?: { workspace_id?: string; runtime_type?: string; execution_id?: string; session_id?: string; kind?: string },
+    ) => {
+      const search = new URLSearchParams();
+      if (params?.workspace_id) search.set("workspace_id", params.workspace_id);
+      if (params?.runtime_type) search.set("runtime_type", params.runtime_type);
+      if (params?.execution_id) search.set("execution_id", params.execution_id);
+      if (params?.session_id) search.set("session_id", params.session_id);
+      if (params?.kind) search.set("kind", params.kind);
+      const suffix = search.toString() ? `?${search.toString()}` : "";
+      return request<PaginatedResponse<ExecutionAnnotation>>(`/api/v1/logs/events${suffix}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
     dispatchCliExecution: (token: string, executionId: string) =>
       request<ApiResponse<CliExecutionResult>>(`/api/v1/runtime-executions/${executionId}/dispatch-cli`, {
         method: "POST",

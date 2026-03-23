@@ -108,7 +108,7 @@ async def _sync_document(
                 api_key=embedding_context.provider_connection.api_key,
                 base_url=embedding_context.provider_connection.base_url,
             )
-            embeddings = await adapter.embed_texts(chunks, embedding_context.model_name)
+            embeddings = await adapter.embed_texts(chunks, embedding_context.model_name, input_type="passage")
             session.add_all(
                 [
                     KnowledgeChunk(

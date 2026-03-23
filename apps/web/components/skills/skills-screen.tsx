@@ -242,7 +242,9 @@ export function SkillsScreen() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs leading-6 text-mutedInk">{skill.description}</p>
-                  <p className="mt-2 text-[11px] text-mutedInk">Pack: {skill.pack_slug ?? "workspace"} / Role: {skill.agent_role_slug ?? "unassigned"}</p>
+                  <p className="mt-2 text-[11px] text-mutedInk">
+                    Pack: {skill.pack_slug ?? "workspace"} / Role: {skill.agent_role_slug ?? "unassigned"} / Chat: {skill.chat_callable ? "callable" : "manual"}
+                  </p>
                 </button>
               ))}
             </div>
@@ -258,6 +260,10 @@ export function SkillsScreen() {
                   <div className="border border-white/5 bg-black/25 px-4 py-4">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Pack / capabilities</p>
                     <p className="mt-3 text-sm text-ink">{selectedSkill.pack_slug ?? "workspace"} / v{selectedSkill.pack_version ?? "--"}</p>
+                    <p className="mt-1 text-xs text-mutedInk">
+                      Safety: {selectedSkill.safety_level} / Read only: {selectedSkill.is_read_only ? "yes" : "no"}
+                    </p>
+                    <p className="mt-1 text-xs text-mutedInk">Scenario tags: {selectedSkill.scenario_tags.join(", ") || "--"}</p>
                     <pre className="mt-3 whitespace-pre-wrap font-sans text-xs leading-6 text-mutedInk">{valueToText(selectedSkill.tool_capabilities)}</pre>
                   </div>
                   <div className="border border-white/5 bg-black/25 px-4 py-4">

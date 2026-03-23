@@ -12,6 +12,10 @@ Optional:
 
 - one OpenAI-compatible API key for local smoke tests
 
+Recommended free / low-cost validation path:
+
+- NVIDIA Build using `docs/nvidia-provider-setup.md`
+
 ## Environment
 
 Copy:
@@ -43,6 +47,7 @@ Desktop baseline notes:
 - DreamAxis now treats `git + node + pnpm/npm + python` as the standard local desktop assistant baseline
 - Docker and Browser Runtime are enhancement layers, not hard requirements for every prompt skill
 - open `/environment` after boot to confirm machine baseline + workspace readiness before blaming a skill failure
+- use `docs/repo-copilot-runbook.md` when validating Chat as a repo copilot against real repositories
 
 ## Docker workflow
 
@@ -67,6 +72,34 @@ Services:
 - `postgres`
 - `redis`
 
+Important:
+
+- the Docker CLI worker can only execute against repositories that are mounted into the container
+- the default compose setup mounts the DreamAxis repo as `/workspace`
+- if you want repo-copilot CLI probes against other local repos, either mount those paths into the worker container or run the CLI worker directly on the host
+
+### Preferred Windows path for arbitrary local repos
+
+If your API is running in Docker but you want DreamAxis to execute directly against repos like `D:\paperclip` or `D:\some-python-repo`, start a second **host-native** CLI worker:
+
+```powershell
+cd D:/DreamAxis/dreamaxis
+./scripts/start-host-worker.ps1 -InstallDeps
+```
+
+Default host-worker behavior:
+
+- binds on `0.0.0.0:8110`
+- registers as `runtime-cli-host-local`
+- advertises `http://host.docker.internal:8110` back to the Docker API
+- marks itself as `access_mode=host`
+
+Why this matters:
+
+- the Docker worker is best for repos already mounted into `/workspace`
+- the host worker is best for arbitrary Windows paths that the container cannot see directly
+- DreamAxis now prefers a runtime that can actually access the workspace root path before dispatching CLI execution
+
 ## Non-Docker workflow
 
 ### API
@@ -84,6 +117,33 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 cd D:/DreamAxis/dreamaxis/apps/worker
 python -m pip install -e .
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
+```
+
+### Host-native CLI worker for arbitrary Windows repos
+
+When the API is in Docker and the repo you want to inspect lives outside the mounted `/workspace` tree, prefer:
+
+```powershell
+cd D:/DreamAxis/dreamaxis
+./scripts/start-host-worker.ps1 -InstallDeps
+```
+
+Useful overrides:
+
+```powershell
+./scripts/start-host-worker.ps1 `
+  -ApiBaseUrl http://localhost:8000 `
+  -PublicUrl http://host.docker.internal:8110 `
+  -RuntimeId runtime-cli-host-local `
+  -RuntimeName "Host CLI Runtime" `
+  -ScopeType machine `
+  -ScopeRefId host-local
+```
+
+If the API is **not** running in Docker, use a localhost public URL instead:
+
+```powershell
+./scripts/start-host-worker.ps1 -PublicUrl http://127.0.0.1:8110
 ```
 
 ### Browser worker
@@ -124,6 +184,28 @@ After startup:
 15. send a knowledge-enabled prompt
 16. open `/runtime`
 17. verify CLI + Browser + prompt executions are all visible
+
+### NVIDIA validation workflow
+
+Use the scripted path when you want to validate DreamAxis against a real external model gateway without changing repo-tracked secrets:
+
+```powershell
+cd D:/DreamAxis/dreamaxis
+$env:DREAMAXIS_NVIDIA_API_KEY="your-local-key"
+python scripts/run_nvidia_repo_copilot_validation.py
+```
+
+Outputs:
+
+- `docs/chat-acceptance-report-nvidia.md`
+- provider validation summary
+- scenario-based repo-copilot acceptance results
+
+Reference docs:
+
+- `docs/nvidia-provider-setup.md`
+- `docs/repo-copilot-runbook.md`
+- `docs/notebooklm-evaluation.md`
 
 ## Knowledge indexing behavior
 

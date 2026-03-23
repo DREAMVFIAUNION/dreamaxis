@@ -22,13 +22,16 @@ from app.schemas.runtime import (
     AgentRoleOut,
     BrowserExecutionResult,
     CliExecutionResult,
+    ExecutionAnnotationOut,
     RuntimeHeartbeatPayload,
     RuntimeExecutionOut,
     RuntimeHostOut,
     RuntimeHostRegisterPayload,
     RuntimeSessionCreate,
+    RuntimeSessionEventOut,
     RuntimeSessionOut,
 )
+from app.services.execution_annotations import derive_execution_timeline, summarize_execution_timeline, timeline_from_events
 from app.services.runtime_dispatcher import (
     close_cli_session,
     create_cli_session,
@@ -36,7 +39,7 @@ from app.services.runtime_dispatcher import (
     dispatch_cli_execution,
     get_runtime_session_or_404,
 )
-from app.services.runtime_registry import heartbeat_runtime_host, is_runtime_online, list_runtimes_for_workspace, upsert_runtime_host
+from app.services.runtime_registry import get_online_runtime_for_workspace, heartbeat_runtime_host, list_runtimes_for_workspace, upsert_runtime_host
 from app.services.runtime_service import mark_runtime_failed, mark_runtime_running, mark_runtime_succeeded
 
 router = APIRouter()
@@ -58,7 +61,23 @@ def serialize_runtime_session(runtime_session: RuntimeSession) -> dict:
 
 
 def serialize_runtime_execution(execution: RuntimeExecution) -> dict:
-    return RuntimeExecutionOut.model_validate(execution).model_dump()
+    details = execution.details_json or {}
+    trace_summary = details.get("trace_summary") if isinstance(details, dict) else None
+    if not trace_summary and isinstance(details, dict):
+        execution_trace = details.get("execution_trace")
+        if isinstance(execution_trace, dict):
+            trace_summary = execution_trace.get("trace_summary")
+    payload = RuntimeExecutionOut.model_validate(execution).model_dump()
+    if trace_summary:
+        payload["trace_summary"] = trace_summary
+    else:
+        payload["trace_summary"] = summarize_execution_timeline(execution, [])
+    if isinstance(details, dict):
+        payload["execution_bundle_id"] = details.get("execution_bundle_id")
+        payload["parent_execution_id"] = details.get("parent_execution_id")
+        payload["child_execution_ids"] = details.get("child_execution_ids")
+        payload["mode"] = details.get("mode")
+    return payload
 
 
 @router.get("/runtimes")
@@ -139,6 +158,18 @@ async def list_runtime_sessions(
     return paginated_response([serialize_runtime_session(item) for item in result.scalars().all()])
 
 
+@router.get("/runtime-sessions/{runtime_session_id}/events")
+async def list_runtime_session_events(
+    runtime_session_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    runtime_session = await get_runtime_session_or_404(session, runtime_session_id=runtime_session_id, user_id=user.id)
+    await session.refresh(runtime_session, attribute_names=["events"])
+    items = [RuntimeSessionEventOut.model_validate(item).model_dump() for item in sorted(runtime_session.events, key=lambda event: event.created_at)]
+    return paginated_response(items)
+
+
 @router.post("/runtime-sessions")
 async def create_runtime_session(
     payload: RuntimeSessionCreate,
@@ -149,10 +180,12 @@ async def create_runtime_session(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    runtimes = await list_runtimes_for_workspace(session, workspace.id)
-    runtime = next((item for item in runtimes if item.runtime_type == "cli" and is_runtime_online(item)), None)
-    if not runtime:
-        raise HTTPException(status_code=503, detail="No online CLI runtime available for this workspace")
+    runtime = await get_online_runtime_for_workspace(
+        session,
+        workspace.id,
+        "cli",
+        workspace.workspace_root_path,
+    )
 
     runtime_session = await create_cli_session(
         session,
@@ -220,6 +253,65 @@ async def get_runtime_execution(
     if not execution:
         raise HTTPException(status_code=404, detail="Runtime execution not found")
     return success_response(serialize_runtime_execution(execution))
+
+
+@router.get("/runtime-executions/{execution_id}/timeline")
+async def get_runtime_execution_timeline(
+    execution_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    execution = await session.scalar(
+        select(RuntimeExecution)
+        .options(selectinload(RuntimeExecution.runtime_session).selectinload(RuntimeSession.events))
+        .where(RuntimeExecution.id == execution_id, RuntimeExecution.user_id == user.id)
+    )
+    if not execution:
+        raise HTTPException(status_code=404, detail="Runtime execution not found")
+    runtime_session = execution.runtime_session
+    session_events = runtime_session.events if runtime_session else []
+    timeline = derive_execution_timeline(execution, session_events=session_events)
+    return success_response(
+        {
+            "execution_id": execution.id,
+            "trace_summary": summarize_execution_timeline(execution, timeline),
+            "timeline": [ExecutionAnnotationOut.model_validate(item).model_dump() for item in timeline],
+        }
+    )
+
+
+@router.get("/logs/events")
+async def list_log_events(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    workspace_id: str | None = Query(default=None),
+    runtime_type: str | None = Query(default=None),
+    execution_id: str | None = Query(default=None),
+    session_id: str | None = Query(default=None),
+    kind: str | None = Query(default=None),
+):
+    statement = (
+        select(RuntimeSession)
+        .options(selectinload(RuntimeSession.events), selectinload(RuntimeSession.runtime))
+        .join(Workspace, RuntimeSession.workspace_id == Workspace.id)
+        .where(Workspace.owner_id == user.id)
+    )
+    if workspace_id:
+        statement = statement.where(RuntimeSession.workspace_id == workspace_id)
+    if session_id:
+        statement = statement.where(RuntimeSession.id == session_id)
+    result = await session.execute(statement.order_by(RuntimeSession.updated_at.desc()))
+    sessions = result.scalars().all()
+    items: list[dict] = []
+    for runtime_session in sessions:
+        if runtime_type and runtime_session.runtime and runtime_session.runtime.runtime_type != runtime_type:
+            continue
+        for item in timeline_from_events(list(runtime_session.events), runtime_execution_id=execution_id):
+            if kind and item.get("kind") != kind:
+                continue
+            items.append(item)
+    items.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+    return paginated_response([ExecutionAnnotationOut.model_validate(item).model_dump() for item in items])
 
 
 @router.post("/runtime-executions/{execution_id}/dispatch-cli")

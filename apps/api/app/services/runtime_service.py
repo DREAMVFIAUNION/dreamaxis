@@ -153,13 +153,42 @@ async def create_runtime_session_event(
     event_type: str,
     message: str | None = None,
     payload_json: dict[str, Any] | None = None,
+    execution_id: str | None = None,
+    annotation_kind: str | None = None,
+    annotation_title: str | None = None,
+    annotation_summary: str | None = None,
+    annotation_status: str | None = None,
+    source_layer: str | None = None,
+    target_label: str | None = None,
+    duration_ms: int | None = None,
+    payload_preview: dict[str, Any] | str | None = None,
 ) -> RuntimeSessionEvent:
+    payload = dict(payload_json or {})
+    if execution_id is not None:
+        payload["execution_id"] = execution_id
+    if annotation_kind is not None:
+        payload["annotation_kind"] = annotation_kind
+    if annotation_title is not None:
+        payload["annotation_title"] = annotation_title
+    if annotation_summary is not None:
+        payload["annotation_summary"] = annotation_summary
+    if annotation_status is not None:
+        payload["annotation_status"] = annotation_status
+    if source_layer is not None:
+        payload["source_layer"] = source_layer
+    if target_label is not None:
+        payload["target_label"] = target_label
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
+    if payload_preview is not None:
+        payload["payload_preview"] = payload_preview
+
     event = RuntimeSessionEvent(
         id=generate_entity_id("rsevt"),
         runtime_session_id=runtime_session_id,
         event_type=event_type,
         message=message,
-        payload_json=payload_json,
+        payload_json=payload or None,
     )
     session.add(event)
     await session.commit()

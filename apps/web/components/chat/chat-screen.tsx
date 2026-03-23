@@ -1,32 +1,39 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type {
-  Conversation,
-  DiscoveredModel,
-  KnowledgeChunkReference,
-  Message,
-  ProviderConnection,
-  RuntimeExecution,
-  SkillDefinition,
-} from "@dreamaxis/client";
+import type { ChatExecutionTrace, ChatMode, Conversation, DiscoveredModel, KnowledgeChunkReference, Message, ProviderConnection, RuntimeExecution, SkillDefinition } from "@dreamaxis/client";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
-import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatComposer, type ChatModeSelection } from "@/components/chat/chat-composer";
 import { StreamMessage } from "@/components/chat/stream-message";
+import { ExecutionTimeline } from "@/components/execution/execution-timeline";
 import { apiClient } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
-function formatDate(value?: string | null) {
-  if (!value) return "--";
-  return new Date(value).toLocaleString();
+function toTrace(value: unknown): ChatExecutionTrace | null {
+  if (!value || typeof value !== "object") return null;
+  if (!("scenario_tag" in value) || !("steps" in value)) return null;
+  return value as ChatExecutionTrace;
 }
 
-function formatDuration(value?: number | null) {
-  if (!value) return "--";
-  if (value < 1000) return `${value} ms`;
-  return `${(value / 1000).toFixed(2)} s`;
+function readiness(trace: ChatExecutionTrace | null) {
+  const status = trace?.workspace_readiness && typeof trace.workspace_readiness === "object" && "status" in trace.workspace_readiness
+    ? String((trace.workspace_readiness as { status?: string }).status ?? "")
+    : null;
+  return status || "Pending";
+}
+
+function tone(value?: string | null) {
+  const v = (value ?? "").toLowerCase();
+  if (v.includes("fail") || v.includes("error") || v.includes("missing")) return "border-red-400/30 bg-red-500/10 text-red-200";
+  if (v.includes("degraded") || v.includes("warn") || v.includes("running")) return "border-amber-300/30 bg-amber-500/10 text-amber-100";
+  if (!v || v === "pending") return "border-white/10 bg-white/5 text-mutedInk";
+  return "border-emerald-400/30 bg-emerald-500/10 text-emerald-200";
+}
+
+function modeLabel(mode?: ChatMode | null) {
+  return mode ? mode.replaceAll("_", " ") : "Auto";
 }
 
 export function ChatScreen({ conversationId }: { conversationId: string }) {
@@ -38,19 +45,17 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const [connectionModels, setConnectionModels] = useState<DiscoveredModel[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
   const [selectedModelName, setSelectedModelName] = useState("");
+  const [chatMode, setChatMode] = useState<ChatModeSelection>("auto");
   const [configPending, setConfigPending] = useState(false);
-  const [streamBuffer, setStreamBuffer] = useState("");
   const [pending, setPending] = useState(false);
+  const [streamBuffer, setStreamBuffer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<KnowledgeChunkReference[] | null>(null);
-  const [lastRuntimeId, setLastRuntimeId] = useState<string | null>(null);
+  const [lastTrace, setLastTrace] = useState<ChatExecutionTrace | null>(null);
   const [composerPreset, setComposerPreset] = useState("");
 
   async function loadConnectionModels(token: string, connectionId: string) {
-    if (!connectionId) {
-      setConnectionModels([]);
-      return;
-    }
+    if (!connectionId) return setConnectionModels([]);
     try {
       const response = await apiClient.getProviderConnectionModels(token, connectionId);
       setConnectionModels(response.data);
@@ -62,7 +67,6 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   useEffect(() => {
     const token = getAuthToken();
     if (!token) return;
-
     (async () => {
       try {
         const [messageRes, conversationRes, runtimeRes, workspaceRes, connectionRes] = await Promise.all([
@@ -79,17 +83,13 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
         setConnections(connectionRes.data);
         setSelectedConnectionId(activeConversation.provider_connection_id ?? connectionRes.data[0]?.id ?? "");
         setSelectedModelName(activeConversation.model_name ?? connectionRes.data[0]?.default_model_name ?? "");
-
-        if (activeConversation.provider_connection_id) {
-          await loadConnectionModels(token, activeConversation.provider_connection_id);
-        }
-
-        if (activeConversation.workspace_id) {
-          const skillsRes = await apiClient.getSkills(token, activeConversation.workspace_id);
-          setSkills(skillsRes.data.filter((skill) => skill.enabled));
-        } else if (workspaceRes.data.length > 0) {
-          const skillsRes = await apiClient.getSkills(token, workspaceRes.data[0].id);
-          setSkills(skillsRes.data.filter((skill) => skill.enabled));
+        const latestChat = runtimeRes.data.find((item) => item.execution_kind === "chat");
+        setLastTrace(toTrace(latestChat?.details_json && (latestChat.details_json as Record<string, unknown>).execution_trace));
+        if (activeConversation.provider_connection_id) await loadConnectionModels(token, activeConversation.provider_connection_id);
+        const workspaceId = activeConversation.workspace_id || workspaceRes.data[0]?.id;
+        if (workspaceId) {
+          const skillsRes = await apiClient.getSkills(token, workspaceId);
+          setSkills(skillsRes.data.filter((skill) => skill.enabled && skill.chat_callable));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load conversation");
@@ -99,288 +99,132 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
 
   const ordered = useMemo(() => [...messages].sort((a, b) => a.created_at.localeCompare(b.created_at)), [messages]);
   const latestRuntime = runtime[0] ?? null;
-  const selectedConnection = useMemo(
-    () => connections.find((item) => item.id === selectedConnectionId) ?? null,
-    [connections, selectedConnectionId],
-  );
+  const latestChatRuntime = useMemo(() => runtime.find((item) => item.execution_kind === "chat") ?? null, [runtime]);
+  const selectedTrace = useMemo(() => lastTrace ?? toTrace(latestChatRuntime?.details_json && (latestChatRuntime.details_json as Record<string, unknown>).execution_trace), [lastTrace, latestChatRuntime]);
+  const runtimeIndex = useMemo(() => new Map(runtime.map((item) => [item.id, item])), [runtime]);
+  const currentMode = selectedTrace?.mode_summary?.active_mode ?? (chatMode === "auto" ? undefined : chatMode);
+  const selectedConnection = connections.find((item) => item.id === selectedConnectionId) ?? null;
 
   return (
     <AppShell>
       <div className="mx-auto grid w-full max-w-7xl gap-6 xl:grid-cols-[1.45fr_0.85fr]">
         <section className="flex flex-col gap-4">
           <header className="panel px-6 py-6">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-signal">DreamAxis Command</p>
-            <h1 className="mt-2 font-headline text-4xl font-black uppercase tracking-tight">Conversation Lane / {conversationId}</h1>
-            <div className="mt-4 grid gap-3 text-xs uppercase tracking-[0.18em] text-mutedInk md:grid-cols-3">
-              <div className="border border-white/5 bg-black/20 px-4 py-3">
-                <p>Connection</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{conversation?.provider_connection_name ?? "Not configured"}</p>
-              </div>
-              <div className="border border-white/5 bg-black/20 px-4 py-3">
-                <p>Model</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{conversation?.model_name ?? "Manual / Auto"}</p>
-              </div>
-              <div className="border border-white/5 bg-black/20 px-4 py-3">
-                <p>Knowledge</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{conversation?.use_knowledge ? "Enabled" : "Optional"}</p>
-              </div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-signal">DreamAxis Repo Copilot</p>
+            <h1 className="mt-2 font-headline text-4xl font-black uppercase tracking-tight">Chat-first verification lane</h1>
+            <div className="mt-4 grid gap-3 text-xs uppercase tracking-[0.18em] text-mutedInk md:grid-cols-5">
+              {[
+                ["Workspace", conversation?.workspace_id ?? "--"],
+                ["Connection", conversation?.provider_connection_name ?? "Not configured"],
+                ["Model", conversation?.model_name ?? "Manual / Auto"],
+                ["Readiness", readiness(selectedTrace)],
+                ["Active mode", modeLabel(currentMode)],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="border border-white/5 bg-black/20 px-4 py-3">
+                  <p>{label}</p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{value}</p>
+                </div>
+              ))}
             </div>
-
             <div className="mt-5 grid gap-3 border border-white/5 bg-black/25 px-4 py-4 md:grid-cols-[1fr_1fr_auto]">
               <label className="flex flex-col gap-2 text-[10px] uppercase tracking-[0.2em] text-mutedInk">
                 Provider connection
-                <select
-                  value={selectedConnectionId}
-                  onChange={async (event) => {
-                    const token = getAuthToken();
-                    const nextConnectionId = event.target.value;
-                    setSelectedConnectionId(nextConnectionId);
-                    const nextConnection = connections.find((item) => item.id === nextConnectionId);
-                    setSelectedModelName(nextConnection?.default_model_name ?? "");
-                    if (token) await loadConnectionModels(token, nextConnectionId);
-                  }}
-                  className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none"
-                >
+                <select value={selectedConnectionId} onChange={async (event) => {
+                  const token = getAuthToken();
+                  const nextConnectionId = event.target.value;
+                  setSelectedConnectionId(nextConnectionId);
+                  const nextConnection = connections.find((item) => item.id === nextConnectionId);
+                  setSelectedModelName(nextConnection?.default_model_name ?? "");
+                  if (token) await loadConnectionModels(token, nextConnectionId);
+                }} className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none">
                   <option value="">Select connection</option>
-                  {connections.map((connection) => (
-                    <option key={connection.id} value={connection.id}>
-                      {connection.name} / {connection.status}
-                    </option>
-                  ))}
+                  {connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.name} / {connection.status}</option>)}
                 </select>
               </label>
-
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] uppercase tracking-[0.2em] text-mutedInk">Model name</label>
-                <input
-                  value={selectedModelName}
-                  onChange={(event) => setSelectedModelName(event.target.value)}
-                  placeholder="e.g. gpt-4.1-mini or free gateway model"
-                  className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none"
-                />
-                {connectionModels.length ? (
-                  <select
-                    value={selectedModelName}
-                    onChange={(event) => setSelectedModelName(event.target.value)}
-                    className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none"
-                  >
-                    <option value="">Pick discovered model</option>
-                    {connectionModels
-                      .filter((item) => item.kind === "chat")
-                      .map((model) => (
-                        <option key={`${model.kind}-${model.name}`} value={model.name}>
-                          {model.name} / {model.source}
-                        </option>
-                      ))}
-                  </select>
-                ) : (
-                  <p className="text-[11px] text-mutedInk">No discovered chat models. You can still enter a model name manually.</p>
-                )}
+                <input value={selectedModelName} onChange={(event) => setSelectedModelName(event.target.value)} placeholder="e.g. qwen/qwen3-coder-480b-a35b-instruct" className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none" />
+                {connectionModels.length ? <select value={selectedModelName} onChange={(event) => setSelectedModelName(event.target.value)} className="border border-white/10 bg-black/20 px-4 py-3 text-sm text-ink outline-none">
+                  <option value="">Pick discovered model</option>
+                  {connectionModels.filter((item) => item.kind === "chat").map((model) => <option key={model.name} value={model.name}>{model.name} / {model.source}</option>)}
+                </select> : <p className="text-[11px] text-mutedInk">No discovered chat models. Manual model entry still works.</p>}
               </div>
-
               <div className="flex flex-col justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={configPending || !selectedConnectionId || !selectedModelName || !conversation}
-                  onClick={async () => {
-                    const token = getAuthToken();
-                    if (!token || !conversation) return;
-                    setConfigPending(true);
-                    setError(null);
-                    try {
-                      const response = await apiClient.updateConversation(token, conversation.id, {
-                        provider_connection_id: selectedConnectionId,
-                        model_name: selectedModelName,
-                      });
-                      setConversation(response.data);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to save model binding");
-                    } finally {
-                      setConfigPending(false);
-                    }
-                  }}
-                  className="border border-signal/40 bg-signal px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-black disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {configPending ? "Saving..." : "Save Lane Config"}
-                </button>
-                <Link href="/settings/providers" className="text-center text-[10px] uppercase tracking-[0.2em] text-signal">
-                  Manage connections
-                </Link>
+                <button type="button" disabled={configPending || !selectedConnectionId || !selectedModelName || !conversation} onClick={async () => {
+                  const token = getAuthToken();
+                  if (!token || !conversation) return;
+                  setConfigPending(true);
+                  setError(null);
+                  try {
+                    const response = await apiClient.updateConversation(token, conversation.id, { provider_connection_id: selectedConnectionId, model_name: selectedModelName });
+                    setConversation(response.data);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to save model binding");
+                  } finally {
+                    setConfigPending(false);
+                  }
+                }} className="border border-signal/40 bg-signal px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-black disabled:cursor-not-allowed disabled:opacity-40">{configPending ? "Saving..." : "Save lane config"}</button>
+                <Link href="/settings/providers" className="text-center text-[10px] uppercase tracking-[0.2em] text-signal">Manage connections</Link>
               </div>
             </div>
           </header>
 
           <div className="flex flex-col gap-4">
-            {ordered.map((message) => (
-              <StreamMessage key={message.id} role={message.role} content={message.content} sources={message.sources_json ?? null} />
-            ))}
+            {ordered.map((message) => <StreamMessage key={message.id} role={message.role} content={message.content} sources={message.sources_json ?? null} />)}
             {pending ? <StreamMessage role="assistant" content={streamBuffer || "Awaiting model deltas..."} pending sources={lastSources} /> : null}
           </div>
 
+          {selectedTrace ? <PanelCard eyebrow="Current turn" title={selectedTrace.trace_summary?.headline ?? "Execution bundle"}>
+            <div className="space-y-5 text-sm text-mutedInk">
+              <div className="flex flex-wrap gap-2">
+                <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(currentMode)}`}>Mode / {modeLabel(currentMode)}</span>
+                <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(selectedTrace.trace_summary?.status)}`}>Bundle / {selectedTrace.execution_bundle_id ?? latestChatRuntime?.id ?? "--"}</span>
+                <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(readiness(selectedTrace))}`}>Readiness / {readiness(selectedTrace)}</span>
+              </div>
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Intent / plan</p><ul className="mt-3 space-y-2 text-sm leading-7 text-ink">{selectedTrace.intent_plan.map((item) => <li key={item}>- {item}</li>)}</ul></div>
+                <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Recommended next step</p><ul className="mt-3 space-y-2 text-sm leading-7 text-ink">{(selectedTrace.recommended_next_actions ?? []).map((item) => <li key={item.label}>- {item.label}{item.reason ? <span className="text-mutedInk"> - {item.reason}</span> : null}</li>)}</ul></div>
+              </div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">What ran</p><div className="mt-3"><ExecutionTimeline items={selectedTrace.actual_events ?? selectedTrace.timeline ?? []} emptyCopy="Send a repo-focused prompt to generate a visible execution lane." resolveArtifacts={(item) => { const r = item.runtime_execution_id ? runtimeIndex.get(item.runtime_execution_id) : null; return Array.isArray(r?.artifacts_json) ? (r.artifacts_json as Array<Record<string, unknown>>) : []; }} /></div></div>
+              {(selectedTrace.steps ?? []).filter((step) => step.runtime_execution_id).map((step) => <div key={step.runtime_execution_id} className="border border-white/5 bg-black/25 px-4 py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-ink">{step.title}</p><p className="mt-1 text-xs uppercase tracking-[0.18em] text-mutedInk">{step.kind} / {step.status}</p></div>{step.runtime_execution_id ? <Link href={`/runtime?execution=${step.runtime_execution_id}`} className="text-[10px] uppercase tracking-[0.18em] text-signal">Open runtime</Link> : null}</div><div className="mt-3 grid gap-2 text-xs text-mutedInk md:grid-cols-2"><p>target: {step.current_url ?? (typeof step.command_preview === "string" ? step.command_preview : step.command_preview ? JSON.stringify(step.command_preview) : "--")}</p><p>exit: {step.exit_code ?? "--"}</p><p>session: {step.runtime_session_id ?? "--"}</p><p>artifacts: {step.artifact_summaries?.length ?? 0}</p></div>{step.output_excerpt ? <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-ink">{step.output_excerpt}</pre> : null}</div>)}
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">What was found</p><div className="mt-3 space-y-3">{(selectedTrace.evidence_items ?? selectedTrace.evidence ?? []).map((item) => <div key={`${item.title}-${item.runtime_execution_id ?? item.content}`} className="border border-white/5 bg-black/30 px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold text-ink">{item.title}</p><span className="text-[10px] uppercase tracking-[0.18em] text-signal">{item.type}</span></div><p className="mt-2 text-xs leading-6 text-mutedInk">{item.content}</p>{item.stderr_excerpt ? <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{item.stderr_excerpt}</pre> : null}</div>)}</div></div>
+              {selectedTrace.proposal ? <div className="border border-white/5 bg-black/25 px-4 py-4"><div className="flex items-center justify-between gap-3"><p className="text-[10px] uppercase tracking-[0.2em] text-signal">Proposal output</p><span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span></div><p className="mt-3 text-sm leading-7 text-ink">{selectedTrace.proposal.summary}</p><div className="mt-4 grid gap-4 xl:grid-cols-2"><div><p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files</p><ul className="mt-2 space-y-2 text-xs leading-6 text-ink">{selectedTrace.proposal.targets.map((target) => <li key={`${target.file_path}-${target.reason}`}>- {target.file_path}<span className="text-mutedInk"> - {target.reason}</span></li>)}</ul></div><div><p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Suggested commands</p><ul className="mt-2 space-y-2 text-xs leading-6 text-ink">{selectedTrace.proposal.suggested_commands.map((command) => <li key={command}>- {command}</li>)}</ul></div></div>{selectedTrace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{selectedTrace.proposal.patch_summary}</p> : null}</div> : null}
+            </div>
+          </PanelCard> : null}
+
           {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
-          <ChatComposer
-            disabled={pending || !conversation?.provider_connection_id || !conversation?.model_name}
-            presetValue={composerPreset}
-            defaultUseKnowledge={conversation?.use_knowledge ?? true}
-            onSend={async ({ content, useKnowledge }) => {
-              const token = getAuthToken();
-              if (!token) return;
-              const optimisticUser: Message = {
-                id: `local-user-${Date.now()}`,
-                conversation_id: conversationId,
-                role: "user",
-                content,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-
-              setMessages((current) => [...current, optimisticUser]);
-              setStreamBuffer("");
-              setPending(true);
-              setError(null);
-              setLastSources(null);
-              setComposerPreset("");
-
-              try {
-                await apiClient.sendMessageStream(token, { conversation_id: conversationId, content, use_knowledge: useKnowledge }, (event) => {
-                  if (event.event === "message_start") {
-                    setLastRuntimeId(String(event.data.runtime_execution_id ?? ""));
-                    const sources = Array.isArray(event.data.sources) ? (event.data.sources as KnowledgeChunkReference[]) : null;
-                    setLastSources(sources);
-                  }
-                  if (event.event === "delta") {
-                    const delta = String(event.data.delta ?? "");
-                    setStreamBuffer((current) => current + delta);
-                  }
-                  if (event.event === "finish") {
-                    const contentFromServer = String(event.data.content ?? streamBuffer);
-                    const sources = Array.isArray(event.data.sources) ? (event.data.sources as KnowledgeChunkReference[]) : null;
-                    const runtimeExecutionId = String(event.data.runtime_execution_id ?? "");
-                    setMessages((current) => [
-                      ...current,
-                      {
-                        id: String(event.data.message_id ?? `assistant-${Date.now()}`),
-                        conversation_id: conversationId,
-                        runtime_execution_id: runtimeExecutionId,
-                        role: "assistant",
-                        content: contentFromServer,
-                        sources_json: sources,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                      },
-                    ]);
-                    setLastSources(sources);
-                    setLastRuntimeId(runtimeExecutionId);
-                    setStreamBuffer("");
-                    setPending(false);
-                    void apiClient.getRuntimeExecutions(token, { conversation_id: conversationId }).then((res) => setRuntime(res.data));
-                  }
-                  if (event.event === "error") {
-                    setError(String(event.data.message ?? "Streaming error"));
-                    setPending(false);
-                  }
-                  if (event.event === "done") {
-                    setPending(false);
-                  }
-                });
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Streaming failed");
-                setPending(false);
-              }
-            }}
-          />
-          {!conversation?.provider_connection_id || !conversation?.model_name ? (
-            <p className="text-sm text-mutedInk">Bind a provider connection and model above before sending messages.</p>
-          ) : null}
+          <ChatComposer disabled={pending} presetValue={composerPreset} defaultUseKnowledge={conversation?.use_knowledge ?? true} mode={chatMode} onModeChange={setChatMode} onSend={async ({ content, useKnowledge, mode }) => {
+            const token = getAuthToken();
+            if (!token) return;
+            setMessages((current) => [...current, { id: `local-user-${Date.now()}`, conversation_id: conversationId, role: "user", content, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]);
+            setStreamBuffer(""); setPending(true); setError(null); setLastSources(null); setComposerPreset(""); setLastTrace(null);
+            try {
+              await apiClient.sendMessageStream(token, { conversation_id: conversationId, content, use_knowledge: useKnowledge, mode }, (event) => {
+                if (event.event === "message_start") { const sources = Array.isArray(event.data.sources) ? (event.data.sources as KnowledgeChunkReference[]) : null; setLastSources(sources); setLastTrace(toTrace(event.data.execution_trace)); }
+                if (event.event === "delta") setStreamBuffer((current) => current + String(event.data.delta ?? ""));
+                if (event.event === "finish") {
+                  const sources = Array.isArray(event.data.sources) ? (event.data.sources as KnowledgeChunkReference[]) : null;
+                  const runtimeExecutionId = String(event.data.runtime_execution_id ?? "");
+                  setMessages((current) => [...current, { id: String(event.data.message_id ?? `assistant-${Date.now()}`), conversation_id: conversationId, runtime_execution_id: runtimeExecutionId, role: "assistant", content: String(event.data.content ?? ""), sources_json: sources, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]);
+                  setLastSources(sources); setLastTrace(toTrace(event.data.execution_trace)); setStreamBuffer(""); setPending(false);
+                  void apiClient.getRuntimeExecutions(token, { conversation_id: conversationId }).then((res) => setRuntime(res.data));
+                }
+                if (event.event === "error") { setError(String(event.data.message ?? "Streaming error")); setPending(false); }
+                if (event.event === "done") setPending(false);
+              });
+            } catch (err) { setError(err instanceof Error ? err.message : "Streaming failed"); setPending(false); }
+          }} />
+          {!conversation?.provider_connection_id || !conversation?.model_name ? <p className="text-sm text-mutedInk">No provider lane is bound yet. DreamAxis can still run local repo-copilot probes and fall back to trace-grounded answers until you save a provider connection and model above.</p> : null}
         </section>
 
         <aside className="flex flex-col gap-6">
-          <PanelCard eyebrow="Runtime telemetry" title="Live context">
+          <PanelCard eyebrow="Operator sidebar" title="Context + shortcuts">
             <div className="space-y-4 text-sm text-mutedInk">
-              <div className="border border-white/5 bg-black/25 px-4 py-4">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-signal">Execution status</p>
-                <p className="mt-3 font-semibold text-ink">{latestRuntime?.status ?? "idle"}</p>
-                <p className="mt-2 leading-7">Latest runtime: {latestRuntime?.id ?? lastRuntimeId ?? "--"}</p>
-                <p>Connection: {latestRuntime?.provider_connection_name ?? conversation?.provider_connection_name ?? "--"}</p>
-                <p>Model: {latestRuntime?.resolved_model_name ?? conversation?.model_name ?? "--"}</p>
-                <p>Duration: {formatDuration(latestRuntime?.duration_ms)}</p>
-                <p>Completed: {formatDate(latestRuntime?.completed_at)}</p>
-              </div>
-              <div className="border border-white/5 bg-black/25 px-4 py-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-signal">Quick skills</p>
-                  <Link href="/skills" className="text-[10px] uppercase tracking-[0.2em] text-signal">Open registry</Link>
-                </div>
-                <div className="mt-3 flex flex-col gap-2">
-                  {skills.slice(0, 4).map((skill) => (
-                    <button
-                      key={skill.id}
-                      type="button"
-                      onClick={() => setComposerPreset(skill.prompt_template)}
-                      className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25"
-                    >
-                      <p className="font-semibold text-ink">{skill.name}</p>
-                      <p className="mt-1 text-xs leading-6 text-mutedInk">{skill.description}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="border border-white/5 bg-black/25 px-4 py-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-signal">Future execution hooks</p>
-                  <Link href="/runtime" className="text-[10px] uppercase tracking-[0.2em] text-signal">Runtime</Link>
-                </div>
-                <div className="mt-3 grid gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setComposerPreset("Run this task with the Builder role. Inspect the repo, use the appropriate CLI or browser skills, and summarize what changed or what should happen next.")}
-                    className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25"
-                  >
-                    <p className="font-semibold text-ink">Run with Builder</p>
-                    <p className="mt-1 text-xs leading-6 text-mutedInk">Repo + CLI + browser oriented execution handoff.</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setComposerPreset("Run this task with the Operator role. Focus on controlled runtime actions, operational checks, and concise execution output.")}
-                    className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25"
-                  >
-                    <p className="font-semibold text-ink">Run with Operator</p>
-                    <p className="mt-1 text-xs leading-6 text-mutedInk">Operational execution framing for CLI / browser workflows.</p>
-                  </button>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <Link href="/skills" className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25">
-                      <p className="font-semibold text-ink">Use browser skill</p>
-                      <p className="mt-1 text-xs leading-6 text-mutedInk">Jump into the Playwright-backed skill registry.</p>
-                    </Link>
-                    <Link href="/knowledge" className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25">
-                      <p className="font-semibold text-ink">Use knowledge pack</p>
-                      <p className="mt-1 text-xs leading-6 text-mutedInk">Review builtin packs or upload workspace docs.</p>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              <div className="border border-white/5 bg-black/25 px-4 py-4">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-signal">Knowledge references</p>
-                {lastSources?.length ? (
-                  <div className="mt-3 space-y-2">
-                    {lastSources.map((source) => (
-                      <div key={source.chunk_id} className="border border-white/5 bg-black/30 px-3 py-3">
-                        <p className="font-semibold text-ink">{source.document_name}</p>
-                        <p className="mt-1 text-xs leading-6">{source.excerpt}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3">No knowledge snippets attached to the latest response.</p>
-                )}
-              </div>
-              <div className="border border-white/5 bg-black/25 px-4 py-4">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-signal">Connection profile</p>
-                <p className="mt-3">Base URL: {selectedConnection?.base_url ?? "--"}</p>
-                <p className="mt-2">Default model: {selectedConnection?.default_model_name ?? "--"}</p>
-                <p className="mt-2">Status: {selectedConnection?.status ?? "--"}</p>
-              </div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.24em] text-signal">Latest runtime</p><p className="mt-3 font-semibold text-ink">{latestRuntime?.status ?? "idle"}</p><p className="mt-2 leading-7">Runtime: {latestRuntime?.id ?? "--"}</p></div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><div className="flex items-center justify-between"><p className="text-[10px] uppercase tracking-[0.24em] text-signal">Quick skills</p><Link href="/skills" className="text-[10px] uppercase tracking-[0.2em] text-signal">Open registry</Link></div><div className="mt-3 flex flex-col gap-2">{skills.slice(0, 5).map((skill) => <button key={skill.id} type="button" onClick={() => setComposerPreset(skill.prompt_template)} className="border border-white/5 bg-black/35 px-3 py-3 text-left transition hover:border-signal/25"><p className="font-semibold text-ink">{skill.name}</p><p className="mt-1 text-xs leading-6 text-mutedInk">{skill.description}</p><p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-signal">{skill.skill_mode} / {skill.chat_modes?.join(", ") || "chat"} / {skill.safety_level}</p></button>)}</div></div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.24em] text-signal">Knowledge references</p>{lastSources?.length ? <div className="mt-3 space-y-2">{lastSources.map((source) => <div key={source.chunk_id} className="border border-white/5 bg-black/30 px-3 py-3"><p className="font-semibold text-ink">{source.document_name}</p><p className="mt-1 text-xs leading-6">{source.excerpt}</p></div>)}</div> : <p className="mt-3 text-xs leading-6 text-mutedInk">No knowledge snippets attached to the latest response.</p>}</div>
+              <div className="border border-white/5 bg-black/25 px-4 py-4"><p className="text-[10px] uppercase tracking-[0.24em] text-signal">Connection profile</p><p className="mt-3">Base URL: {selectedConnection?.base_url ?? "--"}</p><p className="mt-2">Default model: {selectedConnection?.default_model_name ?? "--"}</p><p className="mt-2">Status: {selectedConnection?.status ?? "--"}</p></div>
             </div>
           </PanelCard>
         </aside>

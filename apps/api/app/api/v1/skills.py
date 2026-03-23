@@ -37,6 +37,77 @@ from app.services.runtime_service import create_runtime_execution, mark_runtime_
 router = APIRouter()
 
 
+READ_ONLY_CLI_TOKENS = ["get-childitem", "get-content", "select-string", "git diff", "npm run lint", "npm run build", "npm run test"]
+INTERACTIVE_BROWSER_ACTIONS = {"click", "type", "select_option", "press"}
+
+
+def infer_skill_scenario_tags(skill: SkillDefinition) -> list[str]:
+    slug = skill.slug.lower()
+    name = skill.name.lower()
+    description = skill.description.lower()
+    tags: list[str] = []
+    if any(token in slug or token in name or token in description for token in ["repo", "manifest", "readme", "architecture"]):
+        tags.append("repo_onboarding")
+    if any(token in slug or token in name or token in description for token in ["trace", "diff", "handler", "route", "inventory"]):
+        tags.append("trace_feature_or_bug")
+    if any(token in slug or token in name or token in description for token in ["lint", "build", "test", "capture", "verify", "screenshot"]):
+        tags.append("run_verification_workflow")
+    if any(token in slug or token in name or token in description for token in ["knowledge", "research", "incident", "summary"]):
+        tags.append("knowledge_assisted_troubleshooting")
+    if not tags and skill.skill_mode == "prompt":
+        tags.append("repo_onboarding")
+    return list(dict.fromkeys(tags))
+
+
+def infer_skill_read_only(skill: SkillDefinition) -> bool:
+    if skill.skill_mode == "prompt":
+        return True
+    if skill.skill_mode == "cli":
+        command = (skill.command_template or "").lower()
+        return any(token in command for token in READ_ONLY_CLI_TOKENS)
+    if skill.skill_mode == "browser":
+        capabilities = skill.tool_capabilities if isinstance(skill.tool_capabilities, list) else []
+        return not any(capability in INTERACTIVE_BROWSER_ACTIONS for capability in capabilities)
+    return True
+
+
+def infer_skill_safety_level(skill: SkillDefinition) -> str:
+    if skill.skill_mode == "prompt":
+        return "advisory"
+    return "read_only" if infer_skill_read_only(skill) else "guarded"
+
+
+def infer_chat_modes(skill: SkillDefinition) -> list[str]:
+    scenario_tags = infer_skill_scenario_tags(skill)
+    modes: list[str] = []
+    if "repo_onboarding" in scenario_tags:
+        modes.append("understand")
+    if "trace_feature_or_bug" in scenario_tags:
+        modes.append("inspect")
+    if "verify_local_readiness" in scenario_tags or "run_verification_workflow" in scenario_tags:
+        modes.append("verify")
+    if "knowledge_assisted_troubleshooting" in scenario_tags:
+        modes.append("propose_fix")
+    if skill.skill_mode == "prompt":
+        modes.extend(["understand", "inspect"])
+    if infer_skill_read_only(skill):
+        modes.append("verify")
+    return list(dict.fromkeys(modes))
+
+
+def infer_supports_proposal_output(skill: SkillDefinition) -> bool:
+    scenario_tags = infer_skill_scenario_tags(skill)
+    return skill.skill_mode == "prompt" or "knowledge_assisted_troubleshooting" in scenario_tags
+
+
+def infer_chat_callable(skill: SkillDefinition, compatibility: dict | None = None) -> bool:
+    if not skill.enabled:
+        return False
+    if compatibility and compatibility.get("status") == "blocked":
+        return False
+    return skill.skill_mode in {"prompt", "cli", "browser"}
+
+
 def serialize_skill(
     skill: SkillDefinition,
     *,
@@ -44,6 +115,12 @@ def serialize_skill(
 ) -> dict:
     payload = SkillDefinitionOut.model_validate(skill).model_dump()
     payload["provider_connection_name"] = skill.provider_connection.name if skill.provider_connection else None
+    payload["chat_callable"] = infer_chat_callable(skill, compatibility)
+    payload["chat_modes"] = infer_chat_modes(skill)
+    payload["safety_level"] = infer_skill_safety_level(skill)
+    payload["scenario_tags"] = infer_skill_scenario_tags(skill)
+    payload["is_read_only"] = infer_skill_read_only(skill)
+    payload["supports_proposal_output"] = infer_supports_proposal_output(skill)
     payload["compatibility"] = compatibility
     return payload
 

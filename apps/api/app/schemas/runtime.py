@@ -64,6 +64,31 @@ class RuntimeSessionEventOut(TimestampedModel):
     payload_json: dict[str, Any] | None = None
 
 
+class ExecutionAnnotationOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    summary: str
+    status: str
+    timestamp: str | None = None
+    source_layer: str
+    runtime_execution_id: str | None = None
+    runtime_session_id: str | None = None
+    evidence_refs: list[dict[str, Any]] | None = None
+    payload_preview: dict[str, Any] | str | None = None
+    raw_payload: dict[str, Any] | None = None
+    target_label: str | None = None
+    duration_ms: int | None = None
+
+
+class ExecutionTraceSummaryOut(BaseModel):
+    headline: str
+    summary: str
+    status: str
+    timeline_count: int
+    has_artifacts: bool
+
+
 class AgentRoleOut(TimestampedModel):
     slug: str
     name: str
@@ -126,5 +151,10 @@ class RuntimeExecutionOut(TimestampedModel):
     duration_ms: int | None = None
     artifacts_json: dict[str, Any] | list[dict[str, Any]] | None = None
     details_json: dict[str, Any] | None = None
+    trace_summary: ExecutionTraceSummaryOut | None = None
+    execution_bundle_id: str | None = None
+    parent_execution_id: str | None = None
+    child_execution_ids: list[str] | None = None
+    mode: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None

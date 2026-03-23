@@ -66,6 +66,18 @@ Lists provider connections for the current user.
 
 Creates a new OpenAI-compatible connection.
 
+Example NVIDIA Build payload:
+
+```json
+{
+  "provider_type": "openai_compatible",
+  "name": "NVIDIA Build",
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "default_model_name": "qwen/qwen3-coder-480b-a35b-instruct",
+    "default_embedding_model_name": "nvidia/llama-3.2-nv-embedqa-1b-v2"
+}
+```
+
 ### `PATCH /api/v1/provider-connections/{id}`
 
 Updates:
@@ -169,6 +181,17 @@ Supports:
 - `model_name`
 - `use_knowledge`
 
+Example model binding:
+
+```json
+{
+  "workspace_id": "workspace-main",
+  "provider_connection_id": "conn-nvidia-build",
+  "model_name": "qwen/qwen3-coder-480b-a35b-instruct",
+  "use_knowledge": true
+}
+```
+
 ### `PATCH /api/v1/conversations/{conversationId}`
 
 Supports:
@@ -184,7 +207,7 @@ Supports:
 
 ### `POST /api/v1/messages/stream`
 
-Streaming assistant route with OpenAI-compatible output.
+Streaming assistant route with OpenAI-compatible output plus repo-copilot execution metadata.
 
 ### SSE event contract
 
@@ -199,6 +222,10 @@ Streaming assistant route with OpenAI-compatible output.
 - `message_id`
 - `content`
 - `runtime_execution_id`
+- `runtime_execution_ids`
+- `execution_trace`
+- `artifact_summaries`
+- `recommended_next_actions`
 - `sources`
 - `usage`
 - `provider_connection_name`
@@ -217,6 +244,10 @@ Returned fields include pack metadata:
 - `pack_slug`
 - `pack_version`
 - `is_builtin`
+- `chat_callable`
+- `safety_level`
+- `scenario_tags`
+- `is_read_only`
 - `tool_capabilities`
 - `knowledge_scope`
 - `required_capabilities`

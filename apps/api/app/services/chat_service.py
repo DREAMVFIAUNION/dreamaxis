@@ -136,7 +136,8 @@ async def build_llm_messages(
     payload: list[dict[str, str]] = [{"role": "system", "content": "\n\n".join(system_parts)}]
     for message in history:
         payload.append({"role": message.role, "content": message.content})
-    payload.append({"role": "user", "content": user_prompt})
+    if not history or history[-1].role != "user" or history[-1].content != user_prompt:
+        payload.append({"role": "user", "content": user_prompt})
     return payload
 
 

@@ -163,6 +163,14 @@ async def create_cli_session(
             session,
             runtime_session_id=runtime_session.id,
             event_type="session_created",
+            message="CLI session created",
+            annotation_kind="session_created",
+            annotation_title="CLI session created",
+            annotation_summary="Created a reusable CLI session for workspace-bound command execution.",
+            annotation_status="ready",
+            source_layer="runtime",
+            target_label=context.get("cwd"),
+            payload_preview={"cwd": context.get("cwd"), "reusable": runtime_session.reusable},
             payload_json={"runtime_id": runtime.id, "context_json": runtime_session.context_json},
         )
         return runtime_session
@@ -222,6 +230,13 @@ async def create_browser_session(
             session,
             runtime_session_id=runtime_session.id,
             event_type="session_created",
+            message="Browser session created",
+            annotation_kind="session_created",
+            annotation_title="Browser session created",
+            annotation_summary="Created a reusable browser session for local page automation.",
+            annotation_status="ready",
+            source_layer="runtime",
+            payload_preview={"reusable": runtime_session.reusable},
             payload_json={"runtime_id": runtime.id, "context_json": runtime_session.context_json},
         )
         return runtime_session
@@ -243,6 +258,12 @@ async def close_cli_session(session: AsyncSession, runtime_session: RuntimeSessi
         session,
         runtime_session_id=runtime_session.id,
         event_type="session_closed",
+        message="Runtime session closed",
+        annotation_kind="session_closed",
+        annotation_title="Session closed",
+        annotation_summary="Closed the runtime session and released its active context.",
+        annotation_status="ready",
+        source_layer="runtime",
         payload_json={"runtime_id": runtime_session.runtime_id},
     )
     return runtime_session
@@ -260,7 +281,12 @@ async def dispatch_cli_execution(
 ) -> dict[str, Any]:
     ensure_runtime_type(skill.required_runtime_type, "cli")
     normalized_command = validate_cli_command(command)
-    runtime = await get_online_runtime_for_workspace(session, workspace.id, "cli")
+    runtime = await get_online_runtime_for_workspace(
+        session,
+        workspace.id,
+        "cli",
+        workspace.workspace_root_path,
+    )
     runtime_session = await create_cli_session(
         session,
         runtime=runtime,
@@ -329,10 +355,25 @@ async def dispatch_cli_execution(
         session,
         runtime_session_id=runtime_session.id,
         event_type="command_executed",
+        execution_id=execution.id,
+        message="CLI command executed",
+        annotation_kind="command_finished",
+        annotation_title="CLI command executed",
+        annotation_summary=f"Ran a workspace-scoped command with exit code {result.get('exit_code')}.",
+        annotation_status="succeeded" if int(result.get("exit_code") or 0) == 0 else "failed",
+        source_layer="runtime",
+        target_label=normalized_command[:120],
+        duration_ms=result.get("duration_ms"),
+        payload_preview={
+            "command": normalized_command,
+            "exit_code": result.get("exit_code"),
+            "cwd": result.get("cwd"),
+        },
         payload_json={
             "command": normalized_command,
             "exit_code": result.get("exit_code"),
             "duration_ms": result.get("duration_ms"),
+            "cwd": result.get("cwd"),
         },
     )
     return {
@@ -354,7 +395,12 @@ async def dispatch_browser_execution(
 ) -> dict[str, Any]:
     ensure_runtime_type(skill.required_runtime_type, "browser")
     normalized_actions = validate_browser_actions(actions)
-    runtime = await get_online_runtime_for_workspace(session, workspace.id, "browser")
+    runtime = await get_online_runtime_for_workspace(
+        session,
+        workspace.id,
+        "browser",
+        workspace.workspace_root_path,
+    )
     runtime_session = await create_browser_session(
         session,
         runtime=runtime,
@@ -416,10 +462,25 @@ async def dispatch_browser_execution(
         session,
         runtime_session_id=runtime_session.id,
         event_type="browser_actions_executed",
+        execution_id=execution.id,
+        message="Browser actions executed",
+        annotation_kind="browser_action",
+        annotation_title="Browser actions executed",
+        annotation_summary="Ran browser automation actions and captured the resulting page state.",
+        annotation_status="succeeded",
+        source_layer="runtime",
+        target_label=result.get("current_url"),
+        duration_ms=result.get("duration_ms"),
+        payload_preview={
+            "actions": normalized_actions[:3],
+            "current_url": result.get("current_url"),
+            "title": result.get("title"),
+        },
         payload_json={
             "actions": normalized_actions,
             "duration_ms": result.get("duration_ms"),
             "current_url": result.get("current_url"),
+            "title": result.get("title"),
         },
     )
     return {

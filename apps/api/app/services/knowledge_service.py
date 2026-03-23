@@ -47,6 +47,8 @@ def build_embedding_error_message(exc: Exception, *, deferred: bool = False) -> 
         message = "Embeddings could not be created because the provider account has no available quota."
     elif "connection error" in lowered or "timed out" in lowered or "temporarily unavailable" in lowered:
         message = "Embeddings could not be created because the provider connection is currently unavailable."
+    elif "input_type" in lowered:
+        message = "Embeddings could not be created because the selected model expects query/passage routing that is not supported by the current provider path."
     else:
         message = "Embeddings could not be created. Check Provider Settings and runtime logs for more detail."
 
@@ -93,7 +95,7 @@ async def ingest_upload(session: AsyncSession, workspace: Workspace, upload_file
             api_key=embedding_context.provider_connection.api_key,
             base_url=embedding_context.provider_connection.base_url,
         )
-        embeddings = await adapter.embed_texts(chunks, embedding_context.model_name)
+        embeddings = await adapter.embed_texts(chunks, embedding_context.model_name, input_type="passage")
 
         rows = []
         for index, (content, embedding) in enumerate(zip(chunks, embeddings, strict=True)):
@@ -144,7 +146,7 @@ async def retrieve_relevant_chunks(
         api_key=embedding_context.provider_connection.api_key,
         base_url=embedding_context.provider_connection.base_url,
     )
-    embedding = (await adapter.embed_texts([query], embedding_context.model_name))[0]
+    embedding = (await adapter.embed_texts([query], embedding_context.model_name, input_type="query"))[0]
     distance = KnowledgeChunk.embedding.cosine_distance(embedding)
     statement = (
         select(KnowledgeChunk, KnowledgeDocument, distance.label("distance"))

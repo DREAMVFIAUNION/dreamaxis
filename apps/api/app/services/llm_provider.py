@@ -81,19 +81,56 @@ class OpenAICompatibleProviderAdapter:
                 usage = chunk.usage
         return CompletionResult(content=content, usage=usage)
 
-    async def embed_texts(self, texts: Sequence[str], model_name: str) -> list[list[float]]:
-        try:
-            response = await self.client.embeddings.create(
-                model=model_name,
-                input=list(texts),
-                dimensions=settings.OPENAI_EMBEDDING_DIMENSIONS,
-            )
-        except Exception:
-            response = await self.client.embeddings.create(
-                model=model_name,
-                input=list(texts),
-            )
-        return [list(item.embedding) for item in response.data]
+    async def embed_texts(
+        self,
+        texts: Sequence[str],
+        model_name: str,
+        *,
+        input_type: str | None = None,
+    ) -> list[list[float]]:
+        request_attempts: list[dict] = []
+        base_attempt: dict = {}
+        if settings.OPENAI_EMBEDDING_DIMENSIONS:
+            base_attempt["dimensions"] = settings.OPENAI_EMBEDDING_DIMENSIONS
+        if input_type:
+            base_attempt["extra_body"] = {"input_type": input_type}
+
+        request_attempts.append(base_attempt.copy())
+        if "dimensions" in base_attempt:
+            attempt = base_attempt.copy()
+            attempt.pop("dimensions", None)
+            request_attempts.append(attempt)
+        if "extra_body" in base_attempt:
+            attempt = base_attempt.copy()
+            attempt.pop("extra_body", None)
+            request_attempts.append(attempt)
+        if "dimensions" in base_attempt and "extra_body" in base_attempt:
+            request_attempts.append({})
+
+        if not request_attempts:
+            request_attempts.append({})
+
+        seen_attempts: set[tuple[tuple[str, str], ...]] = set()
+        last_error: Exception | None = None
+
+        for optional_args in request_attempts:
+            fingerprint = tuple(sorted((key, str(value)) for key, value in optional_args.items()))
+            if fingerprint in seen_attempts:
+                continue
+            seen_attempts.add(fingerprint)
+            try:
+                response = await self.client.embeddings.create(
+                    model=model_name,
+                    input=list(texts),
+                    **optional_args,
+                )
+                return [list(item.embedding) for item in response.data]
+            except Exception as exc:
+                last_error = exc
+
+        if last_error is None:
+            raise RuntimeError("Embedding request failed before any provider attempt was made.")
+        raise last_error
 
     async def list_models(self) -> list[dict]:
         response = await self.client.models.list()

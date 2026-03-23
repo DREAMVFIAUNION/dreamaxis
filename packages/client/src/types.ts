@@ -163,6 +163,134 @@ export interface Message {
   updated_at: string;
 }
 
+export type ChatMode = "understand" | "inspect" | "verify" | "propose_fix";
+
+export interface ChatModeSummary {
+  active_mode: ChatMode;
+  requested_mode?: ChatMode | null;
+  inferred_from: "user_selection" | "auto_router" | string;
+  rationale: string;
+}
+
+export interface SkillInvocationSummary {
+  kind: "doctor" | "cli" | "browser" | string;
+  title: string;
+  summary: string;
+  status: "queued" | "succeeded" | "failed" | "ready" | string;
+  runtime_execution_id?: ID | null;
+  runtime_session_id?: ID | null;
+  command_preview?: string | Array<Record<string, unknown>> | null;
+  output_excerpt?: string | null;
+  exit_code?: number | null;
+  current_url?: string | null;
+  artifact_summaries?: Array<Record<string, unknown>>;
+  is_read_only?: boolean;
+}
+
+export interface ChatEvidenceItem {
+  title: string;
+  type: "doctor" | "command_output" | "browser_capture" | "knowledge" | string;
+  runtime_execution_id?: ID | null;
+  content: string;
+  label?: string | null;
+  path?: string | null;
+  current_url?: string | null;
+  command_preview?: string | null;
+  exit_code?: number | null;
+  stderr_excerpt?: string | null;
+  source_names?: string[] | null;
+  artifact_summaries?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown> | null;
+}
+
+export type ScenarioTag =
+  | "repo_onboarding"
+  | "verify_local_readiness"
+  | "trace_feature_or_bug"
+  | "run_verification_workflow"
+  | "knowledge_assisted_troubleshooting"
+  | string;
+
+export interface ChatRecommendedAction {
+  label: string;
+  reason?: string | null;
+}
+
+export interface ChatProposalTarget {
+  file_path: string;
+  reason: string;
+}
+
+export interface ChatProposal {
+  status: "proposal_only" | string;
+  summary: string;
+  targets: ChatProposalTarget[];
+  suggested_commands: string[];
+  patch_summary?: string | null;
+  diff_preview?: string | null;
+  prerequisites: string[];
+  risks: string[];
+  not_applied: boolean;
+}
+
+export interface ExecutionEvidenceRef {
+  runtime_execution_id?: ID | null;
+  document_id?: ID | null;
+  document_name?: string | null;
+  chunk_id?: ID | null;
+}
+
+export interface ExecutionAnnotation {
+  id: string;
+  kind: string;
+  title: string;
+  summary: string;
+  status: "ready" | "queued" | "running" | "succeeded" | "failed" | string;
+  timestamp?: string | null;
+  source_layer: "chat" | "runtime" | "knowledge" | "model" | string;
+  runtime_execution_id?: ID | null;
+  runtime_session_id?: ID | null;
+  evidence_refs?: ExecutionEvidenceRef[] | null;
+  payload_preview?: Record<string, unknown> | string | null;
+  raw_payload?: Record<string, unknown> | null;
+  target_label?: string | null;
+  duration_ms?: number | null;
+}
+
+export interface ExecutionTraceSummary {
+  headline: string;
+  summary: string;
+  status: "queued" | "running" | "succeeded" | "failed" | string;
+  timeline_count: number;
+  has_artifacts: boolean;
+}
+
+export interface ChatExecutionTrace {
+  mode?: ChatMode | null;
+  mode_summary?: ChatModeSummary | null;
+  scenario_tag: ScenarioTag;
+  scenario_label: string;
+  router_reason: string;
+  intent_plan: string[];
+  steps: SkillInvocationSummary[];
+  evidence: ChatEvidenceItem[];
+  evidence_items?: ChatEvidenceItem[];
+  execution_bundle_id?: ID | null;
+  child_execution_ids?: ID[];
+  planned_actions?: ExecutionAnnotation[];
+  actual_events?: ExecutionAnnotation[];
+  timeline?: ExecutionAnnotation[];
+  trace_summary?: ExecutionTraceSummary | null;
+  safety_summary?: Record<string, unknown> | null;
+  machine_summary?: EnvironmentSummary | Record<string, unknown> | null;
+  workspace_readiness?: WorkspaceEnvironmentStatus | Record<string, unknown> | null;
+  install_guidance?: string[];
+  recommended_next_actions?: ChatRecommendedAction[];
+  runtime_execution_ids: ID[];
+  artifact_summaries?: Array<Record<string, unknown>>;
+  proposal?: ChatProposal | null;
+}
+
 export interface Provider {
   id: ID;
   slug: string;
@@ -302,8 +430,17 @@ export interface SkillDefinition extends ConversationModelBinding {
   is_builtin: boolean;
   provider_id?: ID | null;
   model_id?: ID | null;
+  provider_connection_id?: ID | null;
+  provider_connection_name?: string | null;
+  model_name?: string | null;
   allow_model_override: boolean;
   use_knowledge: boolean;
+  chat_callable: boolean;
+  chat_modes?: ChatMode[];
+  safety_level: string;
+  scenario_tags: string[];
+  is_read_only: boolean;
+  supports_proposal_output?: boolean;
   compatibility?: SkillCompatibilityStatus | null;
   created_at: string;
   updated_at: string;
@@ -365,6 +502,16 @@ export interface RuntimeSession {
   reusable: boolean;
   context_json?: RuntimeSessionContext | null;
   last_activity_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RuntimeSessionEvent {
+  id: ID;
+  runtime_session_id: ID;
+  event_type: string;
+  message?: string | null;
+  payload_json?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -441,10 +588,21 @@ export interface RuntimeExecution {
   duration_ms?: number | null;
   artifacts_json?: Record<string, unknown> | Array<Record<string, unknown>> | null;
   details_json?: Record<string, unknown> | null;
+  trace_summary?: ExecutionTraceSummary | null;
+  execution_bundle_id?: ID | null;
+  parent_execution_id?: ID | null;
+  child_execution_ids?: ID[];
+  mode?: ChatMode | null;
   started_at?: string | null;
   completed_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RuntimeExecutionTimeline {
+  execution_id: ID;
+  trace_summary: ExecutionTraceSummary;
+  timeline: ExecutionAnnotation[];
 }
 
 export interface ModelUsage {
@@ -463,6 +621,7 @@ export interface MessageCreateInput {
   conversation_id: ID;
   content: string;
   use_knowledge?: boolean;
+  mode?: ChatMode;
 }
 
 export interface SkillRunInput {

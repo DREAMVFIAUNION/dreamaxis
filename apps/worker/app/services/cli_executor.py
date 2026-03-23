@@ -93,6 +93,15 @@ def _truncate(value: str) -> str:
 def execute_command(session_id: str, command: str, cwd: str | None = None) -> dict[str, Any]:
     cli_session = get_session(session_id)
     resolved_cwd = str(_resolve_path(cli_session.repo_root, cwd or cli_session.cwd))
+    if not Path(resolved_cwd).exists():
+        cli_session.status = "idle"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Runtime host cannot access the requested workspace path. "
+                "If you are using Docker, mount the workspace into the worker container or use a host runtime."
+            ),
+        )
     cli_session.status = "busy"
     started = time.perf_counter()
     try:

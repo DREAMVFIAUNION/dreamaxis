@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 from app.schemas.common import TimestampedModel
+
+
+ChatMode = Literal["understand", "inspect", "verify", "propose_fix"]
 
 
 class MessageCreate(BaseModel):
     conversation_id: str
     content: str
     use_knowledge: bool | None = None
+    mode: ChatMode | None = None
 
 
 class KnowledgeChunkReference(BaseModel):
