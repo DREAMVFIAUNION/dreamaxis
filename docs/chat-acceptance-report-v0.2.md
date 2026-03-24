@@ -12,21 +12,21 @@
 
 ## Scenario matrix
 
-| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Runtime linkage | Safety | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DreamAxis | understand-onboarding | `understand` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | inspect-provider-settings | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | verify-dashboard | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | propose-fix-chat | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | inspect-entrypoint | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Brain Core | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Brain Core | propose-fix-startup | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Failure target | Runtime linkage | Safety | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DreamAxis | understand-onboarding | `understand` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | inspect-provider-settings | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | verify-dashboard | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | propose-fix-chat | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | inspect-entrypoint | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Brain Core | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Brain Core | propose-fix-startup | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 
 ## Screenshot anchors
 
-- `verify-dashboard` conversation: `/chat/conversation-cb6f39e5a3`
-- `propose-fix-chat` conversation: `/chat/conversation-334af0c867`
+- `verify-dashboard` conversation: `/chat/conversation-270ac15e62`
+- `propose-fix-chat` conversation: `/chat/conversation-74ae68705c`
 
 ## Summary
 

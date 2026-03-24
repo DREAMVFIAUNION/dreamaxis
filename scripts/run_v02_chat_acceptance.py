@@ -170,9 +170,11 @@ class Runner:
                 notes.append("verify scenario did not invoke browser runtime")
 
         troubleshooting_ok = True
+        failure_target_ok = True
         if failed_steps:
             failure_summary = trace.get("failure_summary")
             failure_classification = trace.get("failure_classification")
+            primary_failure_target = trace.get("primary_failure_target")
             stderr_highlights = trace.get("stderr_highlights") or []
             grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
             troubleshooting_ok = bool(
@@ -181,10 +183,13 @@ class Runner:
                 and stderr_highlights
                 and grounded_reasoning
             )
+            failure_target_ok = bool(primary_failure_target)
             if not failure_summary:
                 notes.append("failed trace missing failure_summary")
             if not failure_classification:
                 notes.append("failed trace missing failure_classification")
+            if not primary_failure_target:
+                notes.append("failed trace missing primary_failure_target")
             if not stderr_highlights:
                 notes.append("failed trace missing stderr_highlights")
             if not grounded_reasoning:
@@ -218,7 +223,7 @@ class Runner:
         if not safety_ok:
             notes.append("safety summary did not confirm blocked writes / proposal-only mode")
 
-        overall_ok = all([mode_ok, sse_ok, sections_ok, trace_ok, evidence_ok, proposal_ok, browser_ok, troubleshooting_ok, runtime_link_ok, safety_ok])
+        overall_ok = all([mode_ok, sse_ok, sections_ok, trace_ok, evidence_ok, proposal_ok, browser_ok, troubleshooting_ok, failure_target_ok, runtime_link_ok, safety_ok])
         return {
             "repo": scenario.repo_label,
             "workspace_label": scenario.workspace_label,
@@ -236,6 +241,7 @@ class Runner:
             "proposal_ok": proposal_ok,
             "browser_ok": browser_ok,
             "troubleshooting_ok": troubleshooting_ok,
+            "failure_target_ok": failure_target_ok,
             "runtime_link_ok": runtime_link_ok,
             "safety_ok": safety_ok,
             "notes": notes,
@@ -264,15 +270,15 @@ class Runner:
             "",
             "## Scenario matrix",
             "",
-            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Runtime linkage | Safety | Notes |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Failure target | Runtime linkage | Safety | Notes |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for item in self.results:
             notes = "<br>".join(item["notes"]) if item["notes"] else "ok"
             lines.append(
                 f"| {item['repo']} | {item['scenario']} | `{item['mode']}` | {'PASS' if item['ok'] else 'FAIL'} | "
                 f"{'ok' if item['mode_ok'] else 'fail'} | {'ok' if item['trace_ok'] else 'fail'} | {'ok' if item['evidence_ok'] else 'fail'} | "
-                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['troubleshooting_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
+                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['troubleshooting_ok'] else 'fail'} | {'ok' if item['failure_target_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
             )
         lines.extend([
             "",

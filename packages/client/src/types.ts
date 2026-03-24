@@ -272,6 +272,7 @@ export interface ChatExecutionTrace {
   scenario_label: string;
   router_reason: string;
   intent_plan: string[];
+  primary_failure_target?: string | null;
   failure_summary?: string | null;
   failure_classification?: string | null;
   stderr_highlights?: string[];

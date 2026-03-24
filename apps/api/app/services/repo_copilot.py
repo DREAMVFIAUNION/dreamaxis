@@ -102,6 +102,23 @@ def _extract_route(prompt: str) -> str | None:
     return route if route.startswith("/") else None
 
 
+def _normalize_search_candidate(candidate: str | None) -> str | None:
+    if not isinstance(candidate, str):
+        return None
+    cleaned = re.sub(r"\s+", " ", candidate).strip().strip("`'\"").strip(".,:;()[]{}")
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if lowered in {"the", "a", "an", "this", "that", "these", "those"}:
+        return None
+    if lowered.startswith(("the ", "a ", "an ")):
+        parts = cleaned.split(" ", 1)
+        if len(parts) == 2:
+            cleaned = parts[1].strip()
+            lowered = cleaned.lower()
+    return cleaned or None
+
+
 def extract_target_url(prompt: str) -> str | None:
     url_match = re.search(r"https?://[^\s)]+", prompt, flags=re.IGNORECASE)
     if url_match:
@@ -115,7 +132,9 @@ def extract_target_url(prompt: str) -> str | None:
 def extract_search_term(prompt: str) -> str | None:
     quoted = _extract_quoted_target(prompt)
     if quoted:
-        return quoted
+        normalized = _normalize_search_candidate(quoted)
+        if normalized:
+            return normalized
 
     route = _extract_route(prompt)
     if route:
@@ -137,15 +156,15 @@ def extract_search_term(prompt: str) -> str | None:
             return phrase
 
     patterns = [
-        r"(?:where is|where does|trace|find|inspect|search for|look for)\s+([A-Za-z0-9_./\-]+)",
-        r"(?:error|failed|exception|bug|issue)\s+(?:for|in|with)?\s*([A-Za-z0-9_./\-]+)",
-        r"(?:page|route|module|handler|api)\s+([A-Za-z0-9_./\-]+)",
+        r"(?:where is|where does|trace|find|inspect|search for|look for)\s+(?:the\s+|a\s+|an\s+)?([A-Za-z0-9_./\-\s]+?)(?:[?.!,]|$)",
+        r"(?:error|failed|exception|bug|issue)\s+(?:for|in|with)?\s*(?:the\s+|a\s+|an\s+)?([A-Za-z0-9_./\-\s]+?)(?:[?.!,]|$)",
+        r"(?:page|route|module|handler|api)\s+(?:the\s+|a\s+|an\s+)?([A-Za-z0-9_./\-\s]+?)(?:[?.!,]|$)",
     ]
     lowered_prompt = prompt.strip()
     for pattern in patterns:
         match = re.search(pattern, lowered_prompt, flags=re.IGNORECASE)
         if match:
-            candidate = match.group(1).strip().strip(".,)")
+            candidate = _normalize_search_candidate(match.group(1))
             if candidate:
                 return candidate
     return None
@@ -609,6 +628,69 @@ def _extract_high_signal_lines(*texts: str | None, limit: int = 3) -> list[str]:
     return combined[:limit]
 
 
+def _extract_primary_failure_target(step: dict[str, Any], highlights: list[str]) -> str | None:
+    raw_payload = step.get("raw_payload") if isinstance(step.get("raw_payload"), dict) else {}
+
+    for candidate in [
+        step.get("current_url"),
+        step.get("path"),
+        step.get("cwd"),
+        raw_payload.get("current_url"),
+        raw_payload.get("path"),
+        raw_payload.get("cwd"),
+    ]:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    for text in [
+        step.get("summary"),
+        raw_payload.get("summary"),
+        step.get("title"),
+        raw_payload.get("title"),
+        *highlights,
+    ]:
+        if isinstance(text, str) and text.strip():
+            quoted = _normalize_search_candidate(_extract_quoted_target(text))
+            if quoted:
+                return quoted
+
+    command_sources = [
+        step.get("command_preview"),
+        step.get("payload_preview"),
+        step.get("target_label"),
+        raw_payload.get("command_preview"),
+    ]
+    for command_preview in command_sources:
+        if not isinstance(command_preview, str) or not command_preview.strip():
+            continue
+        manifest_match = re.search(
+            r"(package\.json|pnpm-workspace\.yaml|pyproject\.toml|requirements(?:-dev)?\.txt|Dockerfile|docker-compose(?:\.ya?ml)?|README\.md)",
+            command_preview,
+            flags=re.IGNORECASE,
+        )
+        if manifest_match:
+            return manifest_match.group(1)
+
+        quoted = _normalize_search_candidate(_extract_quoted_target(command_preview))
+        if quoted:
+            return quoted
+
+    for line in highlights:
+        url_match = re.search(r"https?://[^\s`'\"]+", line, flags=re.IGNORECASE)
+        if url_match:
+            return url_match.group(0).rstrip(".,)")
+
+        path_match = re.search(
+            r"([A-Za-z0-9_./\\-]+(?:package\.json|pnpm-workspace\.yaml|pyproject\.toml|requirements(?:-dev)?\.txt|Dockerfile|docker-compose(?:\.ya?ml)?|README\.md))",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if path_match:
+            return path_match.group(1)
+
+    return None
+
+
 def _classify_failure(
     step: dict[str, Any],
     *,
@@ -756,10 +838,12 @@ def analyze_failure_state(
         if fallback_label:
             highlights = [fallback_label]
     classification = _classify_failure(primary, doctor_result=doctor_result)
+    primary_target = _extract_primary_failure_target(primary, highlights)
     return {
         "failed_step_title": primary.get("title"),
         "failed_step_kind": primary.get("kind"),
         "primary_runtime_execution_id": primary.get("runtime_execution_id"),
+        "primary_failure_target": primary_target,
         "failure_classification": classification,
         "failure_summary": _build_failure_summary(primary, classification=classification, highlights=highlights, failed_steps=failed_steps),
         "stderr_highlights": highlights,
@@ -793,10 +877,11 @@ def build_recommended_next_actions(
 
     if failure_state:
         classification = str(failure_state.get("failure_classification") or "unknown")
+        primary_target = str(failure_state.get("primary_failure_target") or "").strip()
         if classification == "dependency_or_install":
             actions.append(
                 {
-                    "label": "Restore workspace dependencies, then rerun the same verification probe.",
+                    "label": f"Restore dependencies around {primary_target}, then rerun the same verification probe." if primary_target else "Restore workspace dependencies, then rerun the same verification probe.",
                     "reason": failure_state.get("failure_summary") or "The failure looks like an install or dependency gap.",
                 }
             )
@@ -810,21 +895,21 @@ def build_recommended_next_actions(
         elif classification == "script_or_manifest_missing":
             actions.append(
                 {
-                    "label": "Confirm the expected script or manifest entrypoint before retrying this lane.",
+                    "label": f"Confirm the expected script or manifest entrypoint around {primary_target} before retrying." if primary_target else "Confirm the expected script or manifest entrypoint before retrying this lane.",
                     "reason": failure_state.get("failure_summary") or "The repo does not expose the expected verification entrypoint.",
                 }
             )
         elif classification == "repo_not_ready":
             actions.append(
                 {
-                    "label": "Point DreamAxis at the correct repo root or add the missing workspace markers before retrying.",
+                    "label": f"Fix the workspace binding around {primary_target} before retrying." if primary_target else "Point DreamAxis at the correct repo root or add the missing workspace markers before retrying.",
                     "reason": failure_state.get("failure_summary") or "The workspace root does not match the requested verification path yet.",
                 }
             )
         elif classification == "browser_or_runtime_failure":
             actions.append(
                 {
-                    "label": "Open the failing runtime capture and confirm the local route or page is reachable.",
+                    "label": f"Open the failing runtime capture for {primary_target} and confirm the route or page is reachable." if primary_target else "Open the failing runtime capture and confirm the local route or page is reachable.",
                     "reason": failure_state.get("failure_summary") or "The failure came from the browser/runtime layer.",
                 }
             )
@@ -930,6 +1015,16 @@ def build_proposal(
 
     if search_term and all(existing["file_path"] != search_term for existing in targets):
         targets.insert(0, {"file_path": search_term, "reason": "The prompt pointed to this route, module, or symbol."})
+
+    primary_failure_target = str(failure_state.get("primary_failure_target") or "").strip() if failure_state else ""
+    if primary_failure_target and all(existing["file_path"] != primary_failure_target for existing in targets):
+        targets.insert(
+            0,
+            {
+                "file_path": primary_failure_target,
+                "reason": "Troubleshooting identified this as the primary failure target to inspect first.",
+            },
+        )
 
     if not targets:
         failed_step = next((step for step in trace_steps if step.get("status") == "failed"), None)
@@ -1059,6 +1154,7 @@ def build_repo_copilot_response_prompt(trace: dict[str, Any]) -> str:
 
     failure_summary = trace.get("failure_summary")
     failure_classification = trace.get("failure_classification")
+    primary_failure_target = trace.get("primary_failure_target")
     stderr_highlights = trace.get("stderr_highlights") or []
     grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
     if failure_summary:
@@ -1070,6 +1166,8 @@ def build_repo_copilot_response_prompt(trace: dict[str, Any]) -> str:
                 f"- failure_type: {FAILURE_CLASSIFICATION_LABELS.get(str(failure_classification), str(failure_classification or 'Unknown'))}",
             ]
         )
+        if primary_failure_target:
+            lines.append(f"- primary_failure_target: {primary_failure_target}")
         if stderr_highlights:
             lines.append("- stderr_highlights:")
             for item in stderr_highlights:
@@ -1119,6 +1217,7 @@ def build_repo_copilot_fallback_response(trace: dict[str, Any]) -> str:
     sections.extend(["", REPO_COPILOT_HEADINGS[2]])
     failure_summary = trace.get("failure_summary")
     failure_classification = trace.get("failure_classification")
+    primary_failure_target = trace.get("primary_failure_target")
     stderr_highlights = trace.get("stderr_highlights") or []
     grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
     evidence = []
@@ -1126,6 +1225,8 @@ def build_repo_copilot_fallback_response(trace: dict[str, Any]) -> str:
         label = FAILURE_CLASSIFICATION_LABELS.get(str(failure_classification), str(failure_classification or "Unknown"))
         evidence.append(f"- Failure summary: {failure_summary}")
         evidence.append(f"- Failure type: {label}")
+        if primary_failure_target:
+            evidence.append(f"- Fix this first: {primary_failure_target}")
         for item in stderr_highlights[:3]:
             evidence.append(f"- Stderr highlight: {item}")
         for item in grounded_reasoning[:3]:
@@ -1201,6 +1302,7 @@ def normalize_repo_copilot_response(content: str, trace: dict[str, Any] | None) 
                 str(trace.get("failure_classification") or ""),
                 str(trace.get("failure_classification") or "Unknown"),
             )
+            primary_failure_target = str(trace.get("primary_failure_target") or "").strip()
             stderr_highlights = [str(item) for item in (trace.get("stderr_highlights") or []) if str(item).strip()]
             grounded_reasoning = [
                 str(item) for item in (trace.get("grounded_next_step_reasoning") or []) if str(item).strip()
@@ -1209,6 +1311,8 @@ def normalize_repo_copilot_response(content: str, trace: dict[str, Any] | None) 
                 f"- Failure summary: {failure_summary}",
                 f"- Failure type: {failure_label}",
             ]
+            if primary_failure_target:
+                failure_lines.append(f"- Fix this first: {primary_failure_target}")
             failure_lines.extend(f"- Stderr highlight: {item}" for item in stderr_highlights[:3])
             failure_lines.extend(f"- Why this likely failed: {item}" for item in grounded_reasoning[:3])
             failure_block = "\n".join(failure_lines)
@@ -1830,6 +1934,7 @@ async def collect_repo_copilot_trace(
         "recommended_next_actions": recommended_next_actions,
         "runtime_execution_ids": runtime_execution_ids,
         "artifact_summaries": artifact_summaries,
+        "primary_failure_target": failure_state.get("primary_failure_target") if failure_state else None,
         "failure_summary": failure_state.get("failure_summary") if failure_state else None,
         "failure_classification": failure_state.get("failure_classification") if failure_state else None,
         "stderr_highlights": list(failure_state.get("stderr_highlights") or []) if failure_state else [],

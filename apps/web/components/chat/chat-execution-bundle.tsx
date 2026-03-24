@@ -111,6 +111,7 @@ export function ChatExecutionBundle({
   const evidenceItems = trace.evidence_items ?? trace.evidence ?? [];
   const failureSummary = trace.failure_summary?.trim();
   const failureType = trace.failure_classification?.trim() ?? "";
+  const primaryFailureTarget = trace.primary_failure_target?.trim();
   const stderrHighlights = (trace.stderr_highlights ?? []).filter(Boolean);
   const groundedReasoning = (trace.grounded_next_step_reasoning ?? []).filter(Boolean);
   const failureLabel = FAILURE_TYPE_LABELS[failureType] ?? (failureType ? failureType.replaceAll("_", " ") : "Unknown");
@@ -207,6 +208,12 @@ export function ChatExecutionBundle({
                 <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone("failed")}`}>{failureLabel}</span>
               </div>
               <p className="mt-3 text-sm leading-7 text-ink">{failureSummary}</p>
+              {primaryFailureTarget ? (
+                <div className="mt-4 border border-white/10 bg-black/20 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Fix this first</p>
+                  <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget}</p>
+                </div>
+              ) : null}
               {groundedReasoning.length ? (
                 <div className="mt-4">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Why this likely failed</p>
@@ -240,6 +247,11 @@ export function ChatExecutionBundle({
             <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span>
           </div>
           <p className="mt-3 text-sm leading-7 text-ink">{trace.proposal.summary}</p>
+          {primaryFailureTarget ? (
+            <p className="mt-3 text-xs leading-6 text-mutedInk">
+              Focus target: <span className="text-ink">{primaryFailureTarget}</span>
+            </p>
+          ) : null}
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files</p>
