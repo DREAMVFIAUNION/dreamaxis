@@ -1,0 +1,20 @@
+[project]
+name = "dreamaxis-desktop-worker"
+version = "0.1.0"
+description = "DreamAxis desktop runtime worker"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116.0",
+  "httpx>=0.28.1",
+  "Pillow>=11.2.1",
+  "pydantic-settings>=2.10.1",
+  "pytesseract>=0.3.13",
+  "uvicorn[standard]>=0.35.0"
+]
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

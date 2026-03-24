@@ -81,17 +81,17 @@ def infer_chat_modes(skill: SkillDefinition) -> list[str]:
     scenario_tags = infer_skill_scenario_tags(skill)
     modes: list[str] = []
     if "repo_onboarding" in scenario_tags:
-        modes.append("understand")
+        modes.append("understand_repo")
     if "trace_feature_or_bug" in scenario_tags:
-        modes.append("inspect")
+        modes.append("inspect_repo")
     if "verify_local_readiness" in scenario_tags or "run_verification_workflow" in scenario_tags:
-        modes.append("verify")
+        modes.append("verify_repo")
     if "knowledge_assisted_troubleshooting" in scenario_tags:
         modes.append("propose_fix")
     if skill.skill_mode == "prompt":
-        modes.extend(["understand", "inspect"])
+        modes.extend(["understand_repo", "inspect_repo"])
     if infer_skill_read_only(skill):
-        modes.append("verify")
+        modes.append("verify_repo")
     return list(dict.fromkeys(modes))
 
 

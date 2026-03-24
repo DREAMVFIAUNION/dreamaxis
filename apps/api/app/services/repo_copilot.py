@@ -29,9 +29,9 @@ SCENARIO_LABELS = {
 }
 
 MODE_LABELS: dict[ChatMode, str] = {
-    "understand": "Understand",
-    "inspect": "Inspect",
-    "verify": "Verify",
+    "understand_repo": "Understand repo",
+    "inspect_repo": "Inspect repo",
+    "verify_repo": "Verify repo",
     "propose_fix": "Propose fix",
 }
 
@@ -173,38 +173,38 @@ def extract_search_term(prompt: str) -> str | None:
 
 def infer_mode_from_scenario(scenario_tag: str) -> ChatMode:
     if scenario_tag == "repo_onboarding":
-        return "understand"
+        return "understand_repo"
     if scenario_tag == "trace_feature_or_bug":
-        return "inspect"
+        return "inspect_repo"
     if scenario_tag in {"verify_local_readiness", "run_verification_workflow"}:
-        return "verify"
+        return "verify_repo"
     return "propose_fix"
 
 
 def classify_repo_copilot_scenario(prompt: str, mode: ChatMode | None = None) -> tuple[str, str, ChatMode]:
     lowered = prompt.lower()
-    if mode == "understand":
-        return "repo_onboarding", "Using understand mode to produce a repo-grounded orientation pass.", mode
-    if mode == "inspect":
-        return "trace_feature_or_bug", "Using inspect mode to trace files, routes, handlers, or repo surfaces.", mode
+    if mode == "understand_repo":
+        return "repo_onboarding", "Using understand_repo mode to produce a repo-grounded orientation pass.", mode
+    if mode == "inspect_repo":
+        return "trace_feature_or_bug", "Using inspect_repo mode to trace files, routes, handlers, or repo surfaces.", mode
     if mode == "propose_fix":
         return "knowledge_assisted_troubleshooting", "Using propose-fix mode to gather evidence and prepare a repair proposal.", mode
-    if mode == "verify":
+    if mode == "verify_repo":
         if any(token in lowered for token in ["doctor", "environment", "readiness", "missing", "install", "dependency", "prerequisite", "setup ready"]):
-            return "verify_local_readiness", "Using verify mode to inspect machine and workspace readiness.", mode
-        return "run_verification_workflow", "Using verify mode to run safe verification probes and collect evidence.", mode
+            return "verify_local_readiness", "Using verify_repo mode to inspect machine and workspace readiness.", mode
+        return "run_verification_workflow", "Using verify_repo mode to run safe verification probes and collect evidence.", mode
 
     if any(token in lowered for token in ["error", "failed", "exception", "stack trace", "bug", "issue", "why does", "why did"]):
         return "knowledge_assisted_troubleshooting", "The prompt references a failure or troubleshooting path.", "propose_fix"
     if any(token in lowered for token in ["doctor", "environment", "readiness", "missing", "install", "dependency", "prerequisite", "setup ready"]):
-        return "verify_local_readiness", "The prompt is asking whether the local machine or workspace is ready.", "verify"
+        return "verify_local_readiness", "The prompt is asking whether the local machine or workspace is ready.", "verify_repo"
     if any(token in lowered for token in ["where is", "where does", "trace", "which file", "which module", "handler", "flow", "route", "api path"]):
-        return "trace_feature_or_bug", "The prompt is asking to locate or trace a feature path through the repo.", "inspect"
+        return "trace_feature_or_bug", "The prompt is asking to locate or trace a feature path through the repo.", "inspect_repo"
     if any(token in lowered for token in ["verify", "check", "lint", "build", "smoke", "screenshot", "page works", "ui works", "run tests", "test this"]):
-        return "run_verification_workflow", "The prompt is asking for an execution-backed verification workflow.", "verify"
+        return "run_verification_workflow", "The prompt is asking for an execution-backed verification workflow.", "verify_repo"
     if any(token in lowered for token in ["what is this repo", "how do i start", "how does this start", "main module", "entry point", "key dependency", "repo summary"]):
-        return "repo_onboarding", "The prompt is asking for a repo onboarding summary.", "understand"
-    return "repo_onboarding", "Defaulting to repo onboarding for a general repository understanding request.", "understand"
+        return "repo_onboarding", "The prompt is asking for a repo onboarding summary.", "understand_repo"
+    return "repo_onboarding", "Defaulting to repo onboarding for a general repository understanding request.", "understand_repo"
 
 
 def _doctor_summary_label(doctor_result: dict[str, Any]) -> str:

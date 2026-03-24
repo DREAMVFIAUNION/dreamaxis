@@ -13,6 +13,7 @@
     "@dreamaxis/client": "workspace:*",
     "@dreamaxis/ui": "workspace:*",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.9.4",
     "lucide-react": "^0.511.0",
     "next": "^15.3.2",
     "react": "^19.0.0",

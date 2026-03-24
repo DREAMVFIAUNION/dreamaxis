@@ -163,7 +163,14 @@ export interface Message {
   updated_at: string;
 }
 
-export type ChatMode = "understand" | "inspect" | "verify" | "propose_fix";
+export type ChatMode =
+  | "understand_repo"
+  | "inspect_repo"
+  | "verify_repo"
+  | "propose_fix"
+  | "inspect_desktop"
+  | "verify_desktop"
+  | "operate_desktop";
 
 export interface ChatModeSummary {
   active_mode: ChatMode;
@@ -221,13 +228,27 @@ export interface GroundingSignal {
   kind: string;
   label: string;
   value: string;
-  source_layer: "request" | "workspace" | "repo" | "runtime" | "browser" | "knowledge" | string;
+  source_layer: "request" | "workspace" | "repo" | "runtime" | "browser" | "desktop" | "knowledge" | string;
   status?: "ready" | "observed" | "warning" | string;
   reason?: string | null;
 }
 
 export interface GroundedTarget {
-  type: "workspace" | "route" | "module" | "command" | "runtime" | "file" | "browser" | string;
+  type:
+    | "workspace"
+    | "route"
+    | "module"
+    | "command"
+    | "runtime"
+    | "file"
+    | "browser"
+    | "desktop"
+    | "app"
+    | "window"
+    | "control"
+    | "process"
+    | "system"
+    | string;
   label: string;
   value: string;
   reason: string;
@@ -264,6 +285,44 @@ export interface ChatProposal {
   prerequisites: string[];
   risks: string[];
   not_applied: boolean;
+}
+
+export interface DesktopActionRequest {
+  id: string;
+  action: string;
+  title: string;
+  target_label?: string | null;
+  target_app?: string | null;
+  target_window?: string | null;
+  risk_note?: string | null;
+  arguments?: Record<string, unknown> | null;
+  requires_confirmation: boolean;
+}
+
+export interface DesktopActionStep {
+  id: string;
+  action: string;
+  title: string;
+  status: "planned" | "approved" | "blocked" | "executed" | string;
+  target_label?: string | null;
+  summary?: string | null;
+}
+
+export interface DesktopActionApproval {
+  status: "not_required" | "approval_required" | "approved" | "denied" | string;
+  summary: string;
+  requested_actions: DesktopActionRequest[];
+  next_step_label?: string | null;
+  reason?: string | null;
+}
+
+export interface DesktopExecutionArtifact {
+  kind: string;
+  name?: string | null;
+  mime_type?: string | null;
+  data_url?: string | null;
+  text?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ExecutionEvidenceRef {
@@ -308,9 +367,11 @@ export interface ChatExecutionTrace {
   grounding_summary?: ChatGroundingSummary | null;
   grounded_targets?: GroundedTarget[];
   primary_grounded_target?: GroundedTarget | null;
+  desktop_grounding_summary?: ChatGroundingSummary | null;
   reflection_summary?: ChatReflectionSummary | null;
   reflection_reason?: string | null;
   reflection_next_probe?: string | null;
+  workflow_stage?: "grounding" | "approval" | "execution" | "reflection" | "complete" | string;
   primary_failure_target?: string | null;
   failure_summary?: string | null;
   failure_classification?: string | null;
@@ -325,6 +386,9 @@ export interface ChatExecutionTrace {
   actual_events?: ExecutionAnnotation[];
   timeline?: ExecutionAnnotation[];
   trace_summary?: ExecutionTraceSummary | null;
+  desktop_action_approval?: DesktopActionApproval | null;
+  requested_desktop_actions?: DesktopActionRequest[];
+  desktop_action_steps?: DesktopActionStep[];
   safety_summary?: Record<string, unknown> | null;
   machine_summary?: EnvironmentSummary | Record<string, unknown> | null;
   workspace_readiness?: WorkspaceEnvironmentStatus | Record<string, unknown> | null;
@@ -332,6 +396,7 @@ export interface ChatExecutionTrace {
   recommended_next_actions?: ChatRecommendedAction[];
   runtime_execution_ids: ID[];
   artifact_summaries?: Array<Record<string, unknown>>;
+  desktop_artifacts?: DesktopExecutionArtifact[] | null;
   proposal?: ChatProposal | null;
 }
 
@@ -513,7 +578,7 @@ export type SkillExecutionMode = "prompt" | "cli" | "browser" | string;
 export interface RuntimeHost {
   id: ID;
   name: string;
-  runtime_type: "cli" | "browser" | string;
+  runtime_type: "cli" | "browser" | "desktop" | string;
   endpoint_url: string;
   capabilities_json?: Record<string, unknown> | null;
   scope_type: string;
@@ -537,7 +602,7 @@ export interface RuntimeSessionContext {
 
 export interface RuntimeSession {
   id: ID;
-  session_type: "cli" | "browser" | string;
+  session_type: "cli" | "browser" | "desktop" | string;
   runtime_id: ID;
   runtime_name?: string | null;
   workspace_id: ID;
@@ -618,7 +683,7 @@ export interface RuntimeExecution {
   provider_connection_name?: string | null;
   user_id: ID;
   source: "chat" | "skill" | string;
-  execution_kind: "chat" | "skill_prompt" | "skill_cli" | "skill_browser" | string;
+  execution_kind: "chat" | "skill_prompt" | "skill_cli" | "skill_browser" | "desktop_inspect" | "desktop_operate" | string;
   status: "queued" | "running" | "succeeded" | "failed" | string;
   prompt_preview?: string | null;
   command_preview?: string | null;
@@ -647,6 +712,12 @@ export interface RuntimeExecutionTimeline {
   execution_id: ID;
   trace_summary: ExecutionTraceSummary;
   timeline: ExecutionAnnotation[];
+}
+
+export interface DesktopApprovalReviewResult {
+  execution: RuntimeExecution;
+  child_execution?: RuntimeExecution | null;
+  execution_trace?: ChatExecutionTrace | null;
 }
 
 export interface ModelUsage {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -121,6 +121,16 @@ class BrowserExecutionResult(BaseModel):
     extracted_text: str = ""
     duration_ms: int | None = None
     artifacts_json: list[dict[str, Any]] | dict[str, Any] | None = None
+
+
+class DesktopApprovalReviewPayload(BaseModel):
+    decision: Literal["approved", "denied"]
+
+
+class DesktopApprovalReviewResult(BaseModel):
+    execution: dict[str, Any]
+    child_execution: dict[str, Any] | None = None
+    execution_trace: dict[str, Any] | None = None
 
 
 class RuntimeExecutionOut(TimestampedModel):

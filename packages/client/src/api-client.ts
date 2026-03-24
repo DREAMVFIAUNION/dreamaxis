@@ -4,6 +4,7 @@ import type {
   AppConfig,
   ApiResponse,
   ChatExecutionTrace,
+  DesktopApprovalReviewResult,
   DoctorCheckResult,
   BrowserExecutionResult,
   CliExecutionResult,
@@ -447,6 +448,12 @@ export function createApiClient(baseUrl?: string) {
       request<ApiResponse<BrowserExecutionResult>>(`/api/v1/runtime-executions/${executionId}/dispatch-browser`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
+      }),
+    reviewDesktopApproval: (token: string, executionId: string, payload: { decision: "approved" | "denied" }) =>
+      request<ApiResponse<DesktopApprovalReviewResult>>(`/api/v1/runtime-executions/${executionId}/desktop-approval`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
       }),
   };
 }

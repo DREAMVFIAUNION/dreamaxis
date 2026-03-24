@@ -22,6 +22,8 @@ from app.schemas.runtime import (
     AgentRoleOut,
     BrowserExecutionResult,
     CliExecutionResult,
+    DesktopApprovalReviewPayload,
+    DesktopApprovalReviewResult,
     ExecutionAnnotationOut,
     RuntimeHeartbeatPayload,
     RuntimeExecutionOut,
@@ -31,6 +33,7 @@ from app.schemas.runtime import (
     RuntimeSessionEventOut,
     RuntimeSessionOut,
 )
+from app.services.desktop_operator import review_desktop_action_approval
 from app.services.execution_annotations import derive_execution_timeline, summarize_execution_timeline, timeline_from_events
 from app.services.runtime_dispatcher import (
     close_cli_session,
@@ -277,6 +280,50 @@ async def get_runtime_execution_timeline(
             "trace_summary": summarize_execution_timeline(execution, timeline),
             "timeline": [ExecutionAnnotationOut.model_validate(item).model_dump() for item in timeline],
         }
+    )
+
+
+@router.post("/runtime-executions/{execution_id}/desktop-approval")
+async def review_runtime_execution_desktop_approval(
+    execution_id: str,
+    payload: DesktopApprovalReviewPayload,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+):
+    execution = await session.scalar(
+        select(RuntimeExecution)
+        .options(
+            selectinload(RuntimeExecution.provider_connection),
+            selectinload(RuntimeExecution.runtime),
+            selectinload(RuntimeExecution.runtime_session),
+        )
+        .join(Workspace, RuntimeExecution.workspace_id == Workspace.id)
+        .where(RuntimeExecution.id == execution_id, Workspace.owner_id == user.id)
+    )
+    if not execution:
+        raise HTTPException(status_code=404, detail="Runtime execution not found")
+
+    workspace = await session.scalar(select(Workspace).where(Workspace.id == execution.workspace_id, Workspace.owner_id == user.id))
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    try:
+        parent_execution, child_execution, trace = await review_desktop_action_approval(
+            session,
+            workspace=workspace,
+            user=user,
+            parent_execution=execution,
+            decision=payload.decision,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return success_response(
+        DesktopApprovalReviewResult(
+            execution=serialize_runtime_execution(parent_execution),
+            child_execution=serialize_runtime_execution(child_execution) if child_execution else None,
+            execution_trace=trace,
+        ).model_dump()
     )
 
 

@@ -19,6 +19,11 @@ from app.models.workspace import Workspace
 from app.schemas.message import MessageCreate, MessageOut
 from app.services.assistant_service import generate_message_id
 from app.services.chat_service import build_llm_messages, resolve_conversation_context, serialize_sources, summarize_details
+from app.services.desktop_operator import (
+    build_desktop_operator_fallback_response,
+    build_desktop_operator_response_prompt,
+    collect_desktop_operator_trace,
+)
 from app.services.knowledge_service import RetrievedKnowledge, retrieve_relevant_chunks
 from app.services.llm_provider import OpenAICompatibleProviderAdapter, ProviderConfigurationError
 from app.services.repo_copilot import (
@@ -31,6 +36,32 @@ from app.services.runtime_service import create_runtime_execution, mark_runtime_
 from app.utils.sse import sse_event
 
 router = APIRouter()
+DESKTOP_CHAT_MODES = {"inspect_desktop", "verify_desktop", "operate_desktop"}
+
+
+def should_route_desktop_turn(payload: MessageCreate) -> bool:
+    if payload.mode in DESKTOP_CHAT_MODES:
+        return True
+    lowered = payload.content.lower()
+    desktop_tokens = [
+        "desktop",
+        "window",
+        "windows app",
+        "focus window",
+        "active window",
+        "screenshot",
+        "ocr",
+        "screen",
+        "vs code",
+        "vscode",
+        "terminal",
+        "browser tab",
+        "click",
+        "type into",
+        "open app",
+        "launch app",
+    ]
+    return any(token in lowered for token in desktop_tokens)
 
 
 async def get_conversation_or_404(session: AsyncSession, conversation_id: str, user_id: str) -> Conversation:
@@ -66,10 +97,14 @@ def build_trace_response_metadata(trace: dict | None) -> dict:
         "mode": trace.get("mode"),
         "execution_bundle_id": trace.get("execution_bundle_id"),
         "grounding_summary": trace.get("grounding_summary"),
+        "desktop_grounding_summary": trace.get("desktop_grounding_summary"),
         "primary_grounded_target": trace.get("primary_grounded_target"),
         "reflection_summary": trace.get("reflection_summary"),
         "evidence_items": trace.get("evidence_items") or trace.get("evidence") or [],
         "proposal": trace.get("proposal"),
+        "desktop_action_approval": trace.get("desktop_action_approval"),
+        "requested_desktop_actions": trace.get("requested_desktop_actions") or [],
+        "workflow_stage": trace.get("workflow_stage"),
         "workspace_readiness": trace.get("workspace_readiness"),
         "recommended_next_actions": trace.get("recommended_next_actions") or [],
     }
@@ -81,6 +116,16 @@ def build_trace_fallback_content(trace: dict | None, exc: Exception | None = Non
         content += (
             "\n\n> DreamAxis could not reach the configured model, so this answer was assembled directly from local "
             "execution evidence."
+        )
+    return content
+
+
+def build_desktop_trace_fallback_content(trace: dict | None, exc: Exception | None = None) -> str:
+    content = build_desktop_operator_fallback_response(trace or {})
+    if isinstance(exc, OpenAIError):
+        content += (
+            "\n\n> DreamAxis could not reach the configured model, so this desktop operator response was assembled "
+            "directly from local runtime evidence and approval state."
         )
     return content
 
@@ -115,6 +160,7 @@ async def create_message(
     retrieved_knowledge = await maybe_retrieve_knowledge(session, conversation, payload, user.id)
     trace_sources = serialize_sources(retrieved_knowledge)
     trace = None
+    route_desktop = should_route_desktop_turn(payload)
 
     execution = await create_runtime_execution(
         session,
@@ -134,30 +180,48 @@ async def create_message(
 
     try:
         await mark_runtime_running(session, execution)
-        trace = await collect_repo_copilot_trace(
-            session,
-            workspace=workspace,
-            user=user,
-            conversation=conversation,
-            parent_execution=execution,
-            prompt=payload.content,
-            mode=payload.mode,
-            knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
-        )
+        if route_desktop:
+            trace = await collect_desktop_operator_trace(
+                session,
+                workspace=workspace,
+                user=user,
+                conversation=conversation,
+                parent_execution=execution,
+                prompt=payload.content,
+                mode=payload.mode,
+                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+            )
+            additional_system_prompt = build_desktop_operator_response_prompt(trace)
+        else:
+            trace = await collect_repo_copilot_trace(
+                session,
+                workspace=workspace,
+                user=user,
+                conversation=conversation,
+                parent_execution=execution,
+                prompt=payload.content,
+                mode=payload.mode,
+                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+            )
+            additional_system_prompt = build_repo_copilot_response_prompt(trace)
         resolved = await resolve_conversation_context(session, conversation, user_id=user.id)
         llm_messages = await build_llm_messages(
             session,
             conversation,
             payload.content,
             retrieved_knowledge,
-            additional_system_prompt=build_repo_copilot_response_prompt(trace),
+            additional_system_prompt=additional_system_prompt,
         )
         adapter = OpenAICompatibleProviderAdapter(
             api_key=resolved.provider_connection.api_key,
             base_url=resolved.provider_connection.base_url,
         )
         completion = await adapter.complete_chat(resolved.model_name, llm_messages)
-        normalized_content = normalize_repo_copilot_response(completion.content, trace)
+        normalized_content = (
+            completion.content
+            if route_desktop
+            else normalize_repo_copilot_response(completion.content, trace)
+        )
         assistant_message = Message(
             id=generate_message_id("assistant"),
             conversation_id=payload.conversation_id,
@@ -179,17 +243,34 @@ async def create_message(
             details_json=merge_runtime_details(summarize_details(retrieved_knowledge), trace),
         )
     except (ProviderConfigurationError, OpenAIError) as exc:
-        trace = trace or await collect_repo_copilot_trace(
-            session,
-            workspace=workspace,
-            user=user,
-            conversation=conversation,
-            parent_execution=execution,
-            prompt=payload.content,
-            mode=payload.mode,
-            knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+        trace = trace or (
+            await collect_desktop_operator_trace(
+                session,
+                workspace=workspace,
+                user=user,
+                conversation=conversation,
+                parent_execution=execution,
+                prompt=payload.content,
+                mode=payload.mode,
+                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+            )
+            if route_desktop
+            else await collect_repo_copilot_trace(
+                session,
+                workspace=workspace,
+                user=user,
+                conversation=conversation,
+                parent_execution=execution,
+                prompt=payload.content,
+                mode=payload.mode,
+                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+            )
         )
-        fallback_content = build_trace_fallback_content(trace, exc)
+        fallback_content = (
+            build_desktop_trace_fallback_content(trace, exc)
+            if route_desktop
+            else build_trace_fallback_content(trace, exc)
+        )
         assistant_message = Message(
             id=generate_message_id("assistant"),
             conversation_id=payload.conversation_id,
@@ -247,6 +328,7 @@ async def stream_message(
 
         retrieved_knowledge = await maybe_retrieve_knowledge(session, conversation, payload, user.id)
         trace_sources = serialize_sources(retrieved_knowledge)
+        route_desktop = should_route_desktop_turn(payload)
         execution = await create_runtime_execution(
             session,
             workspace_id=workspace.id,
@@ -270,23 +352,37 @@ async def stream_message(
 
         try:
             await mark_runtime_running(session, execution)
-            trace = await collect_repo_copilot_trace(
-                session,
-                workspace=workspace,
-                user=user,
-                conversation=conversation,
-                parent_execution=execution,
-                prompt=payload.content,
-                mode=payload.mode,
-                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
-            )
+            if route_desktop:
+                trace = await collect_desktop_operator_trace(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=execution,
+                    prompt=payload.content,
+                    mode=payload.mode,
+                    knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+                )
+                additional_system_prompt = build_desktop_operator_response_prompt(trace)
+            else:
+                trace = await collect_repo_copilot_trace(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=execution,
+                    prompt=payload.content,
+                    mode=payload.mode,
+                    knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+                )
+                additional_system_prompt = build_repo_copilot_response_prompt(trace)
             resolved = await resolve_conversation_context(session, conversation, user_id=user.id)
             llm_messages = await build_llm_messages(
                 session,
                 conversation,
                 payload.content,
                 retrieved_knowledge,
-                additional_system_prompt=build_repo_copilot_response_prompt(trace),
+                additional_system_prompt=additional_system_prompt,
             )
             yield sse_event(
                 "message_start",
@@ -315,7 +411,8 @@ async def stream_message(
                 if chunk.usage is not None:
                     usage = chunk.usage.model_dump()
 
-            assistant_content = normalize_repo_copilot_response(assistant_content, trace)
+            if not route_desktop:
+                assistant_content = normalize_repo_copilot_response(assistant_content, trace)
 
             assistant_message = Message(
                 id=generate_message_id("assistant"),
@@ -354,17 +451,34 @@ async def stream_message(
                 },
             )
         except (ProviderConfigurationError, OpenAIError) as exc:
-            trace = trace or await collect_repo_copilot_trace(
-                session,
-                workspace=workspace,
-                user=user,
-                conversation=conversation,
-                parent_execution=execution,
-                prompt=payload.content,
-                mode=payload.mode,
-                knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+            trace = trace or (
+                await collect_desktop_operator_trace(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=execution,
+                    prompt=payload.content,
+                    mode=payload.mode,
+                    knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+                )
+                if route_desktop
+                else await collect_repo_copilot_trace(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=execution,
+                    prompt=payload.content,
+                    mode=payload.mode,
+                    knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+                )
             )
-            fallback_content = build_trace_fallback_content(trace, exc)
+            fallback_content = (
+                build_desktop_trace_fallback_content(trace, exc)
+                if route_desktop
+                else build_trace_fallback_content(trace, exc)
+            )
             assistant_message = Message(
                 id=generate_message_id("assistant"),
                 conversation_id=payload.conversation_id,
@@ -393,7 +507,7 @@ async def stream_message(
                         "execution_trace": trace,
                         "artifact_summaries": trace["artifact_summaries"],
                         "sources": trace_sources,
-                        "provider_connection_name": conversation.provider_connection.name if conversation.provider_connection else "Fallback",
+                        "provider_connection_name": conversation.provider_connection.provider_connection_name if conversation.provider_connection else "Fallback",
                         "model_name": conversation.model_name or "deterministic",
                         **build_trace_response_metadata(trace),
                     },
@@ -409,7 +523,7 @@ async def stream_message(
                     "execution_trace": trace,
                     "artifact_summaries": trace["artifact_summaries"],
                     "usage": usage,
-                    "provider_connection_name": conversation.provider_connection.name if conversation.provider_connection else "Fallback",
+                    "provider_connection_name": conversation.provider_connection.provider_connection_name if conversation.provider_connection else "Fallback",
                     "model_name": conversation.model_name or "deterministic",
                     **build_trace_response_metadata(trace),
                 },

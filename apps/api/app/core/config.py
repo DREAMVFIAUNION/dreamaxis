@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     RUNTIME_HEARTBEAT_TIMEOUT_SECONDS: int = 45
     RUNTIME_REQUEST_TIMEOUT_SECONDS: int = 30
     ENABLE_BROWSER_RUNTIME: bool = True
+    ENABLE_DESKTOP_RUNTIME: bool = True
 
     @property
     def cors_origins(self) -> list[str]:

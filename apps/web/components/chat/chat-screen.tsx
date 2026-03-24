@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ChatExecutionTrace, ChatMode, Conversation, DiscoveredModel, KnowledgeChunkReference, Message, ProviderConnection, RuntimeExecution, SkillDefinition } from "@dreamaxis/client";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
 import { ChatComposer, type ChatModeSelection } from "@/components/chat/chat-composer";
@@ -11,6 +12,7 @@ import { StreamMessage } from "@/components/chat/stream-message";
 import { ExecutionTimeline } from "@/components/execution/execution-timeline";
 import { apiClient } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { operatorCardMotion, operatorStageMotion } from "@/lib/operator-motion";
 
 function toTrace(value: unknown): ChatExecutionTrace | null {
   if (!value || typeof value !== "object") return null;
@@ -59,6 +61,7 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const [lastSources, setLastSources] = useState<KnowledgeChunkReference[] | null>(null);
   const [lastTrace, setLastTrace] = useState<ChatExecutionTrace | null>(null);
   const [composerPreset, setComposerPreset] = useState("");
+  const [approvalPendingExecutionId, setApprovalPendingExecutionId] = useState<string | null>(null);
 
   async function loadConnectionModels(token: string, connectionId: string) {
     if (!connectionId) return setConnectionModels([]);
@@ -110,21 +113,51 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const runtimeIndex = useMemo(() => new Map(runtime.map((item) => [item.id, item])), [runtime]);
   const currentMode = selectedTrace?.mode_summary?.active_mode ?? (chatMode === "auto" ? undefined : chatMode);
   const selectedConnection = connections.find((item) => item.id === selectedConnectionId) ?? null;
+  const approvalState = selectedTrace?.desktop_action_approval?.status ?? "not_required";
+
+  async function handleDesktopApproval(executionId: string, decision: "approved" | "denied") {
+    const token = getAuthToken();
+    if (!token) return;
+    setApprovalPendingExecutionId(executionId);
+    setError(null);
+    try {
+      const response = await apiClient.reviewDesktopApproval(token, executionId, { decision });
+      const updatedTrace = response.data.execution_trace ?? traceFromRuntimeExecution(response.data.execution);
+      if (updatedTrace) {
+        setLastTrace(updatedTrace);
+      } else {
+        setLastTrace(null);
+      }
+      const runtimeRes = await apiClient.getRuntimeExecutions(token, { conversation_id: conversationId });
+      setRuntime(runtimeRes.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to review desktop approval");
+    } finally {
+      setApprovalPendingExecutionId(null);
+    }
+  }
 
   return (
     <AppShell>
       <div className="mx-auto grid w-full max-w-7xl gap-6 xl:grid-cols-[1.45fr_0.85fr]">
         <section className="flex flex-col gap-4">
-          <header className="panel px-6 py-6">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-signal">DreamAxis Repo Copilot</p>
-            <h1 className="mt-2 font-headline text-4xl font-black uppercase tracking-tight">Chat-first verification lane</h1>
-            <div className="mt-4 grid gap-3 text-xs uppercase tracking-[0.18em] text-mutedInk md:grid-cols-5">
+          <header className="panel sticky top-4 z-10 px-6 py-6 backdrop-blur">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-signal">DreamAxis Operator Console</p>
+            <h1 className="mt-2 font-headline text-4xl font-black uppercase tracking-tight">Desktop-first grounded control lane</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+              <span className={`border px-3 py-2 ${tone(currentMode)}`}>mode / {modeLabel(currentMode)}</span>
+              <span className={`border px-3 py-2 ${tone(readiness(selectedTrace))}`}>readiness / {readiness(selectedTrace)}</span>
+              <span className={`border px-3 py-2 ${tone(approvalState)}`}>approval / {approvalState.replaceAll("_", " ")}</span>
+              <span className={`border px-3 py-2 ${tone(latestChatRuntime?.trace_summary?.status)}`}>runtime / {latestChatRuntime?.trace_summary?.status ?? "pending"}</span>
+            </div>
+            <div className="mt-4 grid gap-3 text-xs uppercase tracking-[0.18em] text-mutedInk md:grid-cols-6">
               {[
                 ["Workspace", conversation?.workspace_id ?? "--"],
                 ["Connection", conversation?.provider_connection_name ?? "Not configured"],
                 ["Model", conversation?.model_name ?? "Manual / Auto"],
                 ["Readiness", readiness(selectedTrace)],
                 ["Active mode", modeLabel(currentMode)],
+                ["Approval", approvalState.replaceAll("_", " ")],
               ].map(([label, value]) => (
                 <div key={String(label)} className="border border-white/5 bg-black/20 px-4 py-3">
                   <p>{label}</p>
@@ -132,7 +165,7 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
                 </div>
               ))}
             </div>
-            <div className="mt-5 grid gap-3 border border-white/5 bg-black/25 px-4 py-4 md:grid-cols-[1fr_1fr_auto]">
+            <div className="operator-live-rail mt-5 grid gap-3 border border-white/5 bg-black/25 px-4 py-4 md:grid-cols-[1fr_1fr_auto]">
               <label className="flex flex-col gap-2 text-[10px] uppercase tracking-[0.2em] text-mutedInk">
                 Provider connection
                 <select value={selectedConnectionId} onChange={async (event) => {
@@ -176,27 +209,56 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
           </header>
 
           <div className="flex flex-col gap-4">
+            <AnimatePresence initial={false}>
             {ordered.map((message) => {
               const runtimeExecution = message.runtime_execution_id ? runtimeIndex.get(message.runtime_execution_id) ?? null : null;
               const trace = traceFromRuntimeExecution(runtimeExecution);
               return (
+                <motion.div key={message.id} layout {...operatorCardMotion}>
                 <StreamMessage
-                  key={message.id}
                   role={message.role}
                   content={message.content}
                   sources={message.sources_json ?? null}
-                  details={message.role === "assistant" && trace ? <ChatExecutionBundle trace={trace} runtimeIndex={runtimeIndex} parentExecutionId={message.runtime_execution_id} /> : null}
+                  details={message.role === "assistant" && trace ? (
+                    <ChatExecutionBundle
+                      trace={trace}
+                      runtimeIndex={runtimeIndex}
+                      parentExecutionId={message.runtime_execution_id}
+                      approvalPending={approvalPendingExecutionId === message.runtime_execution_id}
+                      onReviewDesktopApproval={
+                        message.runtime_execution_id
+                          ? (decision) => handleDesktopApproval(message.runtime_execution_id as string, decision)
+                          : null
+                      }
+                    />
+                  ) : null}
                 />
+                </motion.div>
               );
             })}
+            </AnimatePresence>
             {pending ? (
-              <StreamMessage
-                role="assistant"
-                content={streamBuffer || "Awaiting model deltas..."}
-                pending
-                sources={lastSources}
-                details={lastTrace ? <ChatExecutionBundle trace={lastTrace} runtimeIndex={runtimeIndex} parentExecutionId={latestChatRuntime?.id ?? null} /> : null}
-              />
+              <motion.div layout {...operatorStageMotion} className="operator-soft-pulse">
+                <StreamMessage
+                  role="assistant"
+                  content={streamBuffer || "Awaiting model deltas..."}
+                  pending
+                  sources={lastSources}
+                  details={lastTrace ? (
+                    <ChatExecutionBundle
+                      trace={lastTrace}
+                      runtimeIndex={runtimeIndex}
+                      parentExecutionId={latestChatRuntime?.id ?? null}
+                      approvalPending={approvalPendingExecutionId === (latestChatRuntime?.id ?? null)}
+                      onReviewDesktopApproval={
+                        latestChatRuntime?.id
+                          ? (decision) => handleDesktopApproval(latestChatRuntime.id, decision)
+                          : null
+                      }
+                    />
+                  ) : null}
+                />
+              </motion.div>
             ) : null}
           </div>
 

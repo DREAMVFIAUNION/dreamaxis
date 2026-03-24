@@ -91,6 +91,24 @@ services:
     ports:
       - "8200:8200"
 
+  desktop-worker:
+    build:
+      context: ../..
+      dockerfile: apps/desktop-worker/Dockerfile
+    environment:
+      API_BASE_URL: http://api:8000
+      RUNTIME_SHARED_TOKEN: ${RUNTIME_SHARED_TOKEN:-dreamaxis-runtime-token}
+      DESKTOP_WORKER_PUBLIC_URL: http://desktop-worker:8300
+      DESKTOP_WORKER_RUNTIME_ID: runtime-desktop-local
+      DESKTOP_WORKER_NAME: Local Desktop Runtime
+      DESKTOP_WORKER_SCOPE_TYPE: workspace
+      DESKTOP_WORKER_SCOPE_REF_ID: workspace-main
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8300:8300"
+
   web:
     build:
       context: ../..

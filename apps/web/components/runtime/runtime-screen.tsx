@@ -18,6 +18,12 @@ function trimBlock(value?: string | null) {
   return value?.trim() || "--";
 }
 
+function toArtifactList(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
+  if (value && typeof value === "object") return [value as Record<string, unknown>];
+  return [];
+}
+
 function readRuntimeEnvironment(runtime: RuntimeHost) {
   const environment =
     runtime.capabilities_json && typeof runtime.capabilities_json === "object"
@@ -149,6 +155,15 @@ export function RuntimeScreen() {
 
   const selectedRuntime = selectedExecution?.runtime_id ? runtimes.find((item) => item.id === selectedExecution.runtime_id) ?? null : null;
   const normalizedSessionTimeline = useMemo(() => normalizeSessionEvents(sessionEvents), [sessionEvents]);
+  const selectedArtifacts = useMemo(() => toArtifactList(selectedExecution?.artifacts_json), [selectedExecution?.artifacts_json]);
+  const selectedApproval = useMemo(() => {
+    const details = selectedExecution?.details_json;
+    if (!details || typeof details !== "object") return null;
+    const trace = (details as Record<string, unknown>).execution_trace;
+    if (!trace || typeof trace !== "object") return null;
+    const approval = (trace as Record<string, unknown>).desktop_action_approval;
+    return approval && typeof approval === "object" ? (approval as Record<string, unknown>) : null;
+  }, [selectedExecution?.details_json]);
 
   return (
     <AppShell>
@@ -186,6 +201,7 @@ export function RuntimeScreen() {
                 <option value="">All runtimes</option>
                 <option value="cli">CLI</option>
                 <option value="browser">Browser</option>
+                <option value="desktop">Desktop</option>
               </select>
             </label>
             <div className="flex flex-wrap gap-4 text-[10px] uppercase tracking-[0.2em] text-mutedInk">
@@ -234,7 +250,7 @@ export function RuntimeScreen() {
                   ))
                 ) : (
                   <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                    No runtime host is online for this workspace yet. Start the CLI or Browser worker and then refresh this view.
+                    No runtime host is online for this workspace yet. Start the CLI, Browser, or Desktop worker and then refresh this view.
                   </div>
                 )}
               </div>
@@ -300,7 +316,7 @@ export function RuntimeScreen() {
                 </div>
               ) : (
                 <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                  No executions yet. Trigger a repo copilot chat, CLI skill, or browser skill to populate this console.
+                  No executions yet. Trigger a repo copilot chat, desktop operator turn, CLI skill, or browser skill to populate this console.
                 </div>
               )}
             </PanelCard>
@@ -388,6 +404,33 @@ export function RuntimeScreen() {
                     ) : null}
                   </div>
 
+                  {selectedApproval ? (
+                    <div className="border border-amber-300/20 bg-amber-500/5 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Approval state</p>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                          {String(selectedApproval.status ?? "pending").replaceAll("_", " ")}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-7 text-ink">{String(selectedApproval.summary ?? "Desktop approval metadata captured.")}</p>
+                      {Array.isArray(selectedApproval.requested_actions) && selectedApproval.requested_actions.length ? (
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          {(selectedApproval.requested_actions as Array<Record<string, unknown>>).map((action, index) => (
+                            <div key={`${String(action.id ?? index)}`} className="border border-white/10 bg-black/20 px-3 py-3">
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                                {String(action.action ?? "desktop_action").replaceAll("_", " ")}
+                              </p>
+                              <p className="mt-2 text-sm text-ink">{String(action.title ?? "Desktop action")}</p>
+                              <p className="mt-2 text-xs leading-6 text-mutedInk">
+                                {String(action.target_window ?? action.target_app ?? action.target_label ?? "desktop")}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="border border-white/5 bg-black/25 px-4 py-4">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Session event stream</p>
                     <div className="mt-3">
@@ -398,7 +441,35 @@ export function RuntimeScreen() {
                     </div>
                   </div>
 
-                  {selectedExecution.execution_kind.includes("browser") && !Array.isArray(selectedExecution.artifacts_json) ? (
+                  {selectedArtifacts.length ? (
+                    <div className="border border-white/5 bg-black/25 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Artifacts</p>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{selectedArtifacts.length} captured</span>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {selectedArtifacts.map((artifact, index) => {
+                          const dataUrl = typeof artifact.data_url === "string" ? artifact.data_url : null;
+                          const name = typeof artifact.name === "string" ? artifact.name : `artifact-${index + 1}`;
+                          return dataUrl ? (
+                            <figure key={`${name}-${index}`} className="overflow-hidden border border-white/5 bg-black/20">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={dataUrl} alt={name} className="w-full object-cover" />
+                              <figcaption className="border-t border-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                                {name}
+                              </figcaption>
+                            </figure>
+                          ) : (
+                            <pre key={`${name}-${index}`} className="whitespace-pre-wrap border border-white/5 bg-black/20 px-3 py-3 font-sans text-xs leading-6 text-ink">
+                              {JSON.stringify(artifact, null, 2)}
+                            </pre>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedExecution.execution_kind.includes("browser") && !selectedArtifacts.length ? (
                     <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
                       Browser execution finished without a retrievable artifact. The timeline and session event stream still preserve the URL and action summary.
                     </div>

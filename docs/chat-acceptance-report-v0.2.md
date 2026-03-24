@@ -14,19 +14,19 @@
 
 | Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Grounding | Proposal | Browser | Troubleshooting | Failure target | Reflection | Runtime linkage | Safety | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DreamAxis | understand-onboarding | `understand` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | inspect-provider-settings | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | verify-dashboard | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | understand-onboarding | `understand_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | inspect-provider-settings | `inspect_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | verify-dashboard | `verify_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 | DreamAxis | propose-fix-chat | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | inspect-entrypoint | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Brain Core | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | verify-readiness | `verify_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | inspect-entrypoint | `inspect_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Brain Core | verify-readiness | `verify_repo` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 | Brain Core | propose-fix-startup | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 
 ## Screenshot anchors
 
-- `verify-dashboard` conversation: `/chat/conversation-3e58c87455`
-- `propose-fix-chat` conversation: `/chat/conversation-aef5b47018`
+- `verify-dashboard` conversation: `/chat/conversation-9dbf29822e`
+- `propose-fix-chat` conversation: `/chat/conversation-1826888b7f`
 
 ## Summary
 

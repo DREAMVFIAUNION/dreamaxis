@@ -35,6 +35,31 @@ BROWSER_ALLOWED_ACTIONS = {
     "close_tab",
 }
 
+DESKTOP_ALLOWED_ACTIONS = {
+    "list_windows",
+    "inspect_focused_window",
+    "list_processes",
+    "read_system_info",
+    "capture_screen",
+    "extract_text",
+    "get_accessibility_tree",
+    "focus_window",
+    "launch_app",
+    "click",
+    "type_text",
+    "press_hotkey",
+}
+
+DESKTOP_READ_ONLY_ACTIONS = {
+    "list_windows",
+    "inspect_focused_window",
+    "list_processes",
+    "read_system_info",
+    "capture_screen",
+    "extract_text",
+    "get_accessibility_tree",
+}
+
 
 def validate_cli_command(command: str) -> str:
     normalized = " ".join(command.strip().split())
@@ -85,5 +110,19 @@ def validate_browser_actions(actions: list[dict]) -> list[dict]:
         action_name = str(action.get("action") or "").strip()
         if not action_name or action_name not in BROWSER_ALLOWED_ACTIONS:
             raise HTTPException(status_code=400, detail=f"Browser action is not allowed: {action_name or 'unknown'}")
+        normalized.append({**action, "action": action_name})
+    return normalized
+
+
+def validate_desktop_actions(actions: list[dict], *, require_read_only: bool = False) -> list[dict]:
+    if not actions:
+        raise HTTPException(status_code=400, detail="Desktop runtime requires at least one action")
+    normalized: list[dict] = []
+    for action in actions:
+        action_name = str(action.get("action") or "").strip()
+        if not action_name or action_name not in DESKTOP_ALLOWED_ACTIONS:
+            raise HTTPException(status_code=400, detail=f"Desktop action is not allowed: {action_name or 'unknown'}")
+        if require_read_only and action_name not in DESKTOP_READ_ONLY_ACTIONS:
+            raise HTTPException(status_code=400, detail=f"Desktop action requires approval and cannot auto-run: {action_name}")
         normalized.append({**action, "action": action_name})
     return normalized

@@ -7,7 +7,15 @@ from pydantic import BaseModel
 from app.schemas.common import TimestampedModel
 
 
-ChatMode = Literal["understand", "inspect", "verify", "propose_fix"]
+ChatMode = Literal[
+    "understand_repo",
+    "inspect_repo",
+    "verify_repo",
+    "propose_fix",
+    "inspect_desktop",
+    "verify_desktop",
+    "operate_desktop",
+]
 
 
 class MessageCreate(BaseModel):

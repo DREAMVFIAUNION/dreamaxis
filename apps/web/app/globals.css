@@ -13,6 +13,10 @@
   --text-muted: #9ca3af;
   --primary: #00d4ff;
   --primary-soft: #a8e8ff;
+  --motion-fast: 180ms;
+  --motion-base: 240ms;
+  --motion-slow: 340ms;
+  --motion-ease-emphasis: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -71,4 +75,42 @@ textarea {
 
 .terminal-glow {
   box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.15), 0 0 60px rgba(0, 212, 255, 0.08);
+}
+
+.operator-live-rail {
+  position: relative;
+  overflow: hidden;
+}
+
+.operator-live-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 212, 255, 0.1) 42%, transparent 100%);
+  transform: translateX(-100%);
+  animation: operator-rail 2.8s var(--motion-ease-emphasis) infinite;
+  pointer-events: none;
+}
+
+.operator-soft-pulse {
+  animation: operator-pulse 1.9s var(--motion-ease-emphasis) infinite;
+}
+
+@keyframes operator-rail {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes operator-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.08);
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.22), 0 0 28px rgba(0, 212, 255, 0.08);
+  }
 }

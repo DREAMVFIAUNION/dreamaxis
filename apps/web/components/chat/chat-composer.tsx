@@ -6,11 +6,14 @@ import type { ChatMode } from "@dreamaxis/client";
 export type ChatModeSelection = ChatMode | "auto";
 
 const CHAT_MODE_OPTIONS: Array<{ value: ChatModeSelection; label: string; hint: string }> = [
-  { value: "auto", label: "Auto", hint: "Let DreamAxis infer the best read-only route." },
-  { value: "understand", label: "Understand", hint: "Repo onboarding, entrypoints, and key modules." },
-  { value: "inspect", label: "Inspect", hint: "Trace routes, files, handlers, and surfaces." },
-  { value: "verify", label: "Verify", hint: "Run safe probes, checks, and browser captures." },
+  { value: "auto", label: "Auto", hint: "Let DreamAxis infer the best repo or desktop operator lane." },
+  { value: "understand_repo", label: "Understand repo", hint: "Repo onboarding, entrypoints, and key modules." },
+  { value: "inspect_repo", label: "Inspect repo", hint: "Trace routes, files, handlers, and repo surfaces." },
+  { value: "verify_repo", label: "Verify repo", hint: "Run safe repo probes, checks, and browser captures." },
   { value: "propose_fix", label: "Propose fix", hint: "Gather evidence and produce a repair proposal only." },
+  { value: "inspect_desktop", label: "Inspect desktop", hint: "Enumerate windows, processes, and focused desktop state." },
+  { value: "verify_desktop", label: "Verify desktop", hint: "Capture screen evidence, OCR, and grounded desktop verification." },
+  { value: "operate_desktop", label: "Operate desktop", hint: "Prepare a gated desktop action plan that requires approval." },
 ];
 
 interface ChatComposerProps {
@@ -61,7 +64,7 @@ export function ChatComposer({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           rows={6}
-          placeholder="Ask DreamAxis to verify, inspect, troubleshoot, or explain a local repo..."
+          placeholder="Ask DreamAxis to inspect a repo, verify a desktop surface, or prepare a gated operator action..."
           className="w-full resize-none border border-white/10 bg-black/20 px-4 py-4 text-sm text-ink outline-none placeholder:text-mutedInk/80 focus:border-signal/40"
         />
         <div className="flex min-w-[220px] flex-col gap-3 border border-white/8 bg-black/20 p-4">
@@ -98,7 +101,7 @@ export function ChatComposer({
             Use knowledge context
           </label>
           <p className="text-[10px] uppercase tracking-[0.24em] text-mutedInk">
-            Mode / {selectedMode.label} / SSE streaming / proposal writes blocked
+            Mode / {selectedMode.label} / SSE streaming / gated desktop actions / proposal writes blocked
           </p>
         </div>
         <button

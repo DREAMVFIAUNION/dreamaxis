@@ -17,6 +17,8 @@ async def get_app_config():
     runtime_types = ["cli"]
     if settings.ENABLE_BROWSER_RUNTIME:
         runtime_types.append("browser")
+    if settings.ENABLE_DESKTOP_RUNTIME:
+        runtime_types.append("desktop")
 
     payload = AppConfigOut(
         auth_mode=settings.AUTH_MODE,
@@ -24,6 +26,7 @@ async def get_app_config():
         runtime_types=runtime_types,
         feature_flags={
             "browser_runtime": settings.ENABLE_BROWSER_RUNTIME,
+            "desktop_runtime": settings.ENABLE_DESKTOP_RUNTIME,
             "knowledge_packs": True,
             "skill_packs": True,
             "environment_doctor": True,

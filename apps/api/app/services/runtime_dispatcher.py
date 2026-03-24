@@ -20,10 +20,12 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.assistant_service import generate_entity_id
 from app.services.runtime_policy import (
+    DESKTOP_READ_ONLY_ACTIONS,
     ensure_runtime_type,
     resolve_workspace_path,
     validate_browser_actions,
     validate_cli_command,
+    validate_desktop_actions,
 )
 from app.services.runtime_registry import get_online_runtime_for_workspace
 from app.services.runtime_service import create_runtime_session_event, touch_runtime_session, update_runtime_binding
@@ -79,6 +81,15 @@ def build_browser_session_context() -> dict[str, Any]:
         "title": None,
         "tabs": [],
         "last_action_at": None,
+    }
+
+
+def build_desktop_session_context() -> dict[str, Any]:
+    return {
+        "focused_window": None,
+        "last_action_at": None,
+        "last_screenshot_at": None,
+        "pending_approval": None,
     }
 
 
@@ -234,6 +245,72 @@ async def create_browser_session(
             annotation_kind="session_created",
             annotation_title="Browser session created",
             annotation_summary="Created a reusable browser session for local page automation.",
+            annotation_status="ready",
+            source_layer="runtime",
+            payload_preview={"reusable": runtime_session.reusable},
+            payload_json={"runtime_id": runtime.id, "context_json": runtime_session.context_json},
+        )
+        return runtime_session
+    except Exception:
+        runtime_session.status = "error"
+        await session.commit()
+        raise
+
+
+async def create_desktop_session(
+    session: AsyncSession,
+    *,
+    runtime: RuntimeHost,
+    workspace: Workspace,
+    user: User,
+    session_mode: str,
+) -> RuntimeSession:
+    context = build_desktop_session_context()
+    if session_mode == "reuse":
+        reusable = await get_reusable_session(
+            session,
+            runtime_id=runtime.id,
+            workspace_id=workspace.id,
+            session_type="desktop",
+        )
+        if reusable:
+            return reusable
+
+    runtime_session = RuntimeSession(
+        id=generate_entity_id("session"),
+        session_type="desktop",
+        runtime_id=runtime.id,
+        workspace_id=workspace.id,
+        created_by_id=user.id,
+        status="idle",
+        reusable=session_mode == "reuse",
+        context_json=context,
+        last_activity_at=utcnow(),
+    )
+    session.add(runtime_session)
+    await session.commit()
+    await session.refresh(runtime_session)
+
+    try:
+        await _worker_request(
+            "POST",
+            f"{runtime.endpoint_url}/internal/runtime/sessions",
+            json_payload={
+                "session_id": runtime_session.id,
+                "workspace_id": workspace.id,
+                "session_type": runtime_session.session_type,
+                "reusable": runtime_session.reusable,
+                "context_json": runtime_session.context_json,
+            },
+        )
+        await create_runtime_session_event(
+            session,
+            runtime_session_id=runtime_session.id,
+            event_type="session_created",
+            message="Desktop session created",
+            annotation_kind="session_created",
+            annotation_title="Desktop session created",
+            annotation_summary="Created a reusable desktop session for Windows inspection or gated control.",
             annotation_status="ready",
             source_layer="runtime",
             payload_preview={"reusable": runtime_session.reusable},
@@ -481,6 +558,114 @@ async def dispatch_browser_execution(
             "duration_ms": result.get("duration_ms"),
             "current_url": result.get("current_url"),
             "title": result.get("title"),
+        },
+    )
+    return {
+        **result,
+        "runtime_id": runtime.id,
+        "runtime_session_id": runtime_session.id,
+        "actions": normalized_actions,
+    }
+
+
+async def dispatch_desktop_execution(
+    session: AsyncSession,
+    *,
+    workspace: Workspace,
+    user: User,
+    execution: RuntimeExecution,
+    actions: list[dict[str, Any]],
+    session_mode: str = "reuse",
+    require_read_only: bool = True,
+) -> dict[str, Any]:
+    normalized_actions = validate_desktop_actions(actions, require_read_only=require_read_only)
+    runtime = await get_online_runtime_for_workspace(
+        session,
+        workspace.id,
+        "desktop",
+        workspace.workspace_root_path,
+    )
+    runtime_session = await create_desktop_session(
+        session,
+        runtime=runtime,
+        workspace=workspace,
+        user=user,
+        session_mode=session_mode,
+    )
+    await update_runtime_binding(
+        session,
+        execution,
+        runtime_id=runtime.id,
+        runtime_session_id=runtime_session.id,
+        command_preview=json.dumps(normalized_actions),
+    )
+
+    try:
+        result = await _worker_request(
+            "POST",
+            f"{runtime.endpoint_url}/internal/runtime/sessions/{runtime_session.id}/execute",
+            json_payload={"actions": normalized_actions},
+        )
+    except HTTPException as exc:
+        if "Desktop session not found" in str(exc.detail):
+            runtime_session.status = "closed"
+            await session.commit()
+            runtime_session = await create_desktop_session(
+                session,
+                runtime=runtime,
+                workspace=workspace,
+                user=user,
+                session_mode="new",
+            )
+            await update_runtime_binding(
+                session,
+                execution,
+                runtime_id=runtime.id,
+                runtime_session_id=runtime_session.id,
+                command_preview=json.dumps(normalized_actions),
+            )
+            result = await _worker_request(
+                "POST",
+                f"{runtime.endpoint_url}/internal/runtime/sessions/{runtime_session.id}/execute",
+                json_payload={"actions": normalized_actions},
+            )
+        else:
+            if runtime_session.status != "closed":
+                runtime_session.status = "error"
+                await session.commit()
+            raise exc
+
+    updated_context = {
+        **(runtime_session.context_json or {}),
+        "focused_window": result.get("focused_window") or result.get("active_window"),
+        "last_action_at": utcnow().isoformat(),
+        "last_screenshot_at": utcnow().isoformat() if any(action.get("action") == "capture_screen" for action in normalized_actions) else (runtime_session.context_json or {}).get("last_screenshot_at"),
+    }
+    await touch_runtime_session(session, runtime_session, status="idle", context_json=updated_context)
+    first_action = normalized_actions[0]["action"] if normalized_actions else "desktop"
+    action_mode = "read-only" if all(action["action"] in DESKTOP_READ_ONLY_ACTIONS for action in normalized_actions) else "gated"
+    await create_runtime_session_event(
+        session,
+        runtime_session_id=runtime_session.id,
+        event_type="desktop_actions_executed",
+        execution_id=execution.id,
+        message="Desktop actions executed",
+        annotation_kind="desktop_action",
+        annotation_title="Desktop actions executed",
+        annotation_summary=f"Ran {action_mode} desktop actions and captured the resulting Windows state.",
+        annotation_status="succeeded",
+        source_layer="runtime",
+        target_label=str(result.get("active_window") or result.get("focused_window") or first_action),
+        duration_ms=result.get("duration_ms"),
+        payload_preview={
+            "actions": normalized_actions[:3],
+            "focused_window": result.get("focused_window") or result.get("active_window"),
+            "artifact_count": len(result.get("artifacts_json") or []),
+        },
+        payload_json={
+            "actions": normalized_actions,
+            "duration_ms": result.get("duration_ms"),
+            "focused_window": result.get("focused_window") or result.get("active_window"),
         },
     )
     return {

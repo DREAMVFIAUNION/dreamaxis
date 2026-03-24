@@ -357,13 +357,13 @@ class Runner:
         self.bootstrap()
         self.ensure_connection()
         scenarios = [
-            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "understand-onboarding", "understand", "What is this repo and how do I start it?"),
-            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "inspect-provider-settings", "inspect", "Trace the provider settings flow."),
-            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "verify-dashboard", "verify", "Verify /dashboard and capture the result.", expect_browser=True),
+            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "understand-onboarding", "understand_repo", "What is this repo and how do I start it?"),
+            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "inspect-provider-settings", "inspect_repo", "Trace the provider settings flow."),
+            Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "verify-dashboard", "verify_repo", "Verify /dashboard and capture the result.", expect_browser=True),
             Scenario("DreamAxis", "DreamAxis v0.2", "dreamaxis-v02-acceptance", REPO_ROOT_CONTAINER.as_posix(), "propose-fix-chat", "propose_fix", "Propose a safe fix path for the v0.2 chat verification lane without changing files.", expect_proposal=True),
-            Scenario("Paperclip", "Paperclip v0.2", "paperclip-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "paperclip").as_posix(), "verify-readiness", "verify", "Is this workspace ready to run locally and what should I verify first?"),
-            Scenario("Paperclip", "Paperclip v0.2", "paperclip-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "paperclip").as_posix(), "inspect-entrypoint", "inspect", "Trace the main workspace entrypoint."),
-            Scenario("Brain Core", "Brain Core v0.2", "brain-core-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "brain-core").as_posix(), "verify-readiness", "verify", "Is this Python workspace ready to run locally?"),
+            Scenario("Paperclip", "Paperclip v0.2", "paperclip-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "paperclip").as_posix(), "verify-readiness", "verify_repo", "Is this workspace ready to run locally and what should I verify first?"),
+            Scenario("Paperclip", "Paperclip v0.2", "paperclip-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "paperclip").as_posix(), "inspect-entrypoint", "inspect_repo", "Trace the main workspace entrypoint."),
+            Scenario("Brain Core", "Brain Core v0.2", "brain-core-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "brain-core").as_posix(), "verify-readiness", "verify_repo", "Is this Python workspace ready to run locally?"),
             Scenario("Brain Core", "Brain Core v0.2", "brain-core-v02-acceptance", (VALIDATION_WORKSPACES_CONTAINER / "brain-core").as_posix(), "propose-fix-startup", "propose_fix", "Propose a safe troubleshooting path for this Python service without changing files.", expect_proposal=True),
         ]
         for scenario in scenarios:

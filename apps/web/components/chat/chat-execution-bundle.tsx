@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { ChatExecutionTrace, ChatEvidenceItem, RuntimeExecution } from "@dreamaxis/client";
+import type { ChatExecutionTrace, ChatEvidenceItem, DesktopExecutionArtifact, RuntimeExecution } from "@dreamaxis/client";
+import { AnimatePresence, motion } from "framer-motion";
+import { operatorCardMotion, operatorMotion, operatorStageMotion } from "@/lib/operator-motion";
 
 const FAILURE_TYPE_LABELS: Record<string, string> = {
   dependency_or_install: "Dependency / install",
@@ -11,6 +13,8 @@ const FAILURE_TYPE_LABELS: Record<string, string> = {
   script_or_manifest_missing: "Script / manifest missing",
   code_or_config_failure: "Code / config failure",
   browser_or_runtime_failure: "Browser / runtime failure",
+  desktop_runtime_missing: "Desktop runtime missing",
+  desktop_runtime_degraded: "Desktop runtime degraded",
   unknown: "Unknown",
 };
 
@@ -23,7 +27,8 @@ function tone(value?: string | null) {
 }
 
 function modeLabel(mode?: string | null) {
-  return mode ? mode.replaceAll("_", " ") : "Auto";
+  if (!mode) return "Auto";
+  return mode.replaceAll("_", " ");
 }
 
 function readiness(trace: ChatExecutionTrace | null) {
@@ -59,17 +64,26 @@ function StepMeta({ label, value }: { label: string; value: string | number | nu
 
 function SectionCard({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="border border-white/5 bg-black/25 px-3 py-3">
+    <motion.div
+      layout
+      {...operatorCardMotion}
+      className="border border-white/5 bg-black/25 px-3 py-3"
+    >
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] uppercase tracking-[0.2em] text-signal">{title}</p>
         {aside}
       </div>
       <div className="mt-3">{children}</div>
-    </div>
+    </motion.div>
   );
 }
 
-function renderArtifact(artifact: Record<string, unknown>, index: number) {
+function normalizeArtifact(artifact: DesktopExecutionArtifact | Record<string, unknown>): Record<string, unknown> {
+  return artifact as unknown as Record<string, unknown>;
+}
+
+function renderArtifact(rawArtifact: DesktopExecutionArtifact | Record<string, unknown>, index: number) {
+  const artifact = normalizeArtifact(rawArtifact);
   const dataUrl = typeof artifact.data_url === "string" ? artifact.data_url : null;
   const kind = typeof artifact.kind === "string" ? artifact.kind : "artifact";
   const name = typeof artifact.name === "string" ? artifact.name : `${kind}-${index + 1}`;
@@ -156,10 +170,14 @@ export function ChatExecutionBundle({
   trace,
   runtimeIndex,
   parentExecutionId,
+  approvalPending = false,
+  onReviewDesktopApproval,
 }: {
   trace: ChatExecutionTrace;
   runtimeIndex: Map<string, RuntimeExecution>;
   parentExecutionId?: string | null;
+  approvalPending?: boolean;
+  onReviewDesktopApproval?: ((decision: "approved" | "denied") => void | Promise<void>) | null;
 }) {
   const currentMode = trace.mode_summary?.active_mode ?? trace.mode;
   const bundleId = trace.execution_bundle_id ?? parentExecutionId ?? "--";
@@ -174,6 +192,10 @@ export function ChatExecutionBundle({
   const stderrHighlights = (trace.stderr_highlights ?? []).filter(Boolean);
   const groundedReasoning = (trace.grounded_next_step_reasoning ?? []).filter(Boolean);
   const failureLabel = FAILURE_TYPE_LABELS[failureType] ?? (failureType ? failureType.replaceAll("_", " ") : "Unknown");
+  const approval = trace.desktop_action_approval;
+  const requestedDesktopActions = trace.requested_desktop_actions ?? [];
+  const workflowStage = trace.workflow_stage ?? "complete";
+  const liveArtifacts = trace.desktop_artifacts ?? [];
 
   return (
     <div className="space-y-4">
@@ -181,6 +203,7 @@ export function ChatExecutionBundle({
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(currentMode)}`}>Mode / {modeLabel(currentMode)}</span>
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(readiness(trace))}`}>Readiness / {readiness(trace)}</span>
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(trace.trace_summary?.status)}`}>Bundle / {bundleId}</span>
+        <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(workflowStage)}`}>Stage / {workflowStage.replaceAll("_", " ")}</span>
         {parentExecutionId ? (
           <Link
             href={`/runtime?execution=${parentExecutionId}`}
@@ -190,6 +213,17 @@ export function ChatExecutionBundle({
           </Link>
         ) : null}
       </div>
+
+      <motion.div
+        layout
+        {...operatorStageMotion}
+        className="operator-live-rail grid gap-3 border border-cyan-400/10 bg-cyan-500/[0.03] px-4 py-4 md:grid-cols-4"
+      >
+        <StepMeta label="Current stage" value={workflowStage.replaceAll("_", " ")} />
+        <StepMeta label="Child executions" value={(trace.steps ?? []).length} />
+        <StepMeta label="Evidence items" value={evidenceItems.length} />
+        <StepMeta label="Artifacts" value={liveArtifacts.length || trace.artifact_summaries?.length || 0} />
+      </motion.div>
 
       <div className="grid gap-3 xl:grid-cols-2">
         <SectionCard title="Intent / plan">
@@ -232,6 +266,75 @@ export function ChatExecutionBundle({
         </SectionCard>
       </div>
 
+      <AnimatePresence initial={false}>
+        {approval ? (
+          <SectionCard
+            title="Approval gate"
+            aside={
+              <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(approval.status)}`}>
+                {approval.status.replaceAll("_", " ")}
+              </span>
+            }
+          >
+            <div className="space-y-3">
+              <p className="text-sm leading-7 text-ink">{approval.summary}</p>
+              {approval.reason ? <p className="text-xs leading-6 text-mutedInk">{approval.reason}</p> : null}
+              {requestedDesktopActions.length ? (
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {requestedDesktopActions.map((action) => (
+                    <motion.div
+                      key={action.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.985 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: operatorMotion.duration.base, ease: operatorMotion.ease }}
+                      className="operator-soft-pulse border border-amber-300/20 bg-amber-500/5 px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="border border-amber-300/20 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                          {action.action.replaceAll("_", " ")}
+                        </span>
+                        <span className="border border-white/10 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                          {action.requires_confirmation ? "confirm required" : "auto"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-ink">{action.title}</p>
+                      <p className="mt-2 text-xs leading-6 text-mutedInk">
+                        {(action.target_window || action.target_app || action.target_label || "desktop").toString()}
+                      </p>
+                      {action.risk_note ? <p className="mt-2 text-xs leading-6 text-amber-100">{action.risk_note}</p> : null}
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs leading-6 text-mutedInk">No explicit approval is needed for this turn.</p>
+              )}
+              {approval?.status === "approval_required" && parentExecutionId && onReviewDesktopApproval ? (
+                <div className="flex flex-wrap items-center gap-3 border border-white/5 bg-black/20 px-3 py-3">
+                  <button
+                    type="button"
+                    disabled={approvalPending}
+                    onClick={() => void onReviewDesktopApproval("approved")}
+                    className="border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {approvalPending ? "Running..." : "Confirm + run"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={approvalPending}
+                    onClick={() => void onReviewDesktopApproval("denied")}
+                    className="border border-red-400/30 bg-red-500/10 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Deny
+                  </button>
+                  <p className="text-xs leading-6 text-mutedInk">State-changing desktop actions stay blocked until you explicitly approve them.</p>
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+        ) : null}
+      </AnimatePresence>
+
       <SectionCard title="What ran" aside={<span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{(trace.steps ?? []).length} child executions</span>}>
         <div className="space-y-3">
           {(trace.steps ?? []).filter((step) => step.runtime_execution_id).map((step) => {
@@ -247,7 +350,8 @@ export function ChatExecutionBundle({
             const stepIsOpen = step.status !== "succeeded";
 
             return (
-              <details key={step.runtime_execution_id} className="group border border-white/5 bg-black/30 px-3 py-3" open={stepIsOpen}>
+              <motion.div key={step.runtime_execution_id} layout {...operatorCardMotion}>
+              <details className="group border border-white/5 bg-black/30 px-3 py-3" open={stepIsOpen}>
                 <summary className="cursor-pointer list-none">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -293,6 +397,7 @@ export function ChatExecutionBundle({
                   {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
                 </div>
               </details>
+              </motion.div>
             );
           })}
         </div>
@@ -373,6 +478,14 @@ export function ChatExecutionBundle({
           </div>
         </div>
       </SectionCard>
+
+      {liveArtifacts.length ? (
+        <SectionCard title="Desktop artifacts" aside={<span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{liveArtifacts.length} live captures</span>}>
+          <div className="grid gap-3 md:grid-cols-2">
+            {liveArtifacts.map((artifact, index) => renderArtifact(artifact, index))}
+          </div>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Recommended next step">
         <ul className="space-y-2 text-sm leading-7 text-ink">
