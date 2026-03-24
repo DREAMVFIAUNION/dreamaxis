@@ -272,6 +272,10 @@ export interface ChatExecutionTrace {
   scenario_label: string;
   router_reason: string;
   intent_plan: string[];
+  failure_summary?: string | null;
+  failure_classification?: string | null;
+  stderr_highlights?: string[];
+  grounded_next_step_reasoning?: string[];
   steps: SkillInvocationSummary[];
   evidence: ChatEvidenceItem[];
   evidence_items?: ChatEvidenceItem[];

@@ -34,6 +34,16 @@ MODE_LABELS: dict[ChatMode, str] = {
     "propose_fix": "Propose fix",
 }
 
+FAILURE_CLASSIFICATION_LABELS = {
+    "dependency_or_install": "Dependency / install",
+    "missing_toolchain": "Missing toolchain",
+    "repo_not_ready": "Repo not ready",
+    "script_or_manifest_missing": "Script / manifest missing",
+    "code_or_config_failure": "Code / config failure",
+    "browser_or_runtime_failure": "Browser / runtime failure",
+    "unknown": "Unknown",
+}
+
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 REPO_COPILOT_HEADINGS = [
     "## Intent / plan",
@@ -546,12 +556,230 @@ def build_planned_steps(
     return _build_repo_onboarding_steps()
 
 
+def _dedupe_lines(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for raw in lines:
+        line = _shorten(raw, limit=220).strip()
+        if not line:
+            continue
+        normalized = line.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(line)
+    return deduped
+
+
+def _extract_high_signal_lines(*texts: str | None, limit: int = 3) -> list[str]:
+    priority_patterns = [
+        "traceback",
+        "exception",
+        "error:",
+        "error ",
+        "failed",
+        "cannot find module",
+        "module not found",
+        "no module named",
+        "not available in path",
+        "not recognized",
+        "err_",
+        "elifecycle",
+        "missing",
+        "not found",
+        "skip:",
+    ]
+    priority_lines: list[str] = []
+    fallback_lines: list[str] = []
+    for text in texts:
+        if not text:
+            continue
+        cleaned = _shorten(text, limit=1800)
+        for raw_line in cleaned.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            lowered = line.lower()
+            if any(token in lowered for token in priority_patterns):
+                priority_lines.append(line)
+            else:
+                fallback_lines.append(line)
+
+    combined = _dedupe_lines(priority_lines) + _dedupe_lines(fallback_lines)
+    return combined[:limit]
+
+
+def _classify_failure(
+    step: dict[str, Any],
+    *,
+    doctor_result: dict[str, Any],
+) -> str:
+    output = " ".join(
+        str(value or "")
+        for value in [
+            step.get("title"),
+            step.get("summary"),
+            step.get("output_excerpt"),
+            step.get("stderr_excerpt"),
+            step.get("command_preview"),
+            step.get("current_url"),
+        ]
+    ).lower()
+    machine_summary = doctor_result.get("machine_summary") or {}
+    workspace_summary = (doctor_result.get("workspace") or {}).get("summary") or {}
+    missing_required = [str(item).lower() for item in workspace_summary.get("missing_required", [])]
+    install_guidance = [str(item).lower() for item in (doctor_result.get("install_guidance") or [])]
+
+    if step.get("kind") == "browser" or any(
+        token in output for token in ["http://", "https://", "err_connection", "navigation timeout", "page.goto", "browser", "playwright"]
+    ):
+        return "browser_or_runtime_failure"
+
+    if any(
+        token in output
+        for token in [
+            "neither pnpm nor npm is available",
+            "python is not available in path",
+            "not available in path",
+            "not recognized as an internal or external command",
+            "command not found",
+            "is not installed",
+        ]
+    ):
+        return "missing_toolchain"
+
+    if any(token in output for token in ["cannot find module", "module not found", "no module named", "importerror", "modulenotfounderror", "elifecycle"]):
+        return "dependency_or_install"
+
+    if any(token in output for token in ["no package.json detected", "no python project markers detected", "no startup manifests found"]):
+        return "repo_not_ready"
+
+    if any(token in output for token in ["has no", "script discovery", "__parse_error__", "no entry manifests found", "manifest inventory"]):
+        return "script_or_manifest_missing"
+
+    if machine_summary.get("status") in {"degraded", "missing"} and (
+        missing_required or any("install" in item for item in install_guidance)
+    ):
+        return "missing_toolchain"
+
+    if any(token in output for token in ["syntaxerror", "typeerror", "referenceerror", "valueerror", "assertionerror", "failed with exit code", "application error"]):
+        return "code_or_config_failure"
+
+    if step.get("kind") == "cli" and step.get("exit_code") not in {None, 0}:
+        return "code_or_config_failure"
+
+    return "unknown"
+
+
+def _build_failure_summary(
+    step: dict[str, Any],
+    *,
+    classification: str,
+    highlights: list[str],
+    failed_steps: list[dict[str, Any]],
+) -> str:
+    title = str(step.get("title") or "Execution step")
+    base = {
+        "dependency_or_install": f"{title} failed because the workspace appears to be missing required dependencies or install artifacts.",
+        "missing_toolchain": f"{title} failed because the required local toolchain is not available in the active runtime.",
+        "repo_not_ready": f"{title} could not run because this workspace is missing the repo markers needed for the requested verification path.",
+        "script_or_manifest_missing": f"{title} could not run because the expected script or manifest entrypoint is missing.",
+        "code_or_config_failure": f"{title} reached the repo command path but failed inside code or configuration execution.",
+        "browser_or_runtime_failure": f"{title} failed in the browser/runtime layer instead of a repo script path.",
+        "unknown": f"{title} failed, but the captured evidence is not yet specific enough to classify it more narrowly.",
+    }[classification]
+
+    pieces = [base]
+    if highlights:
+        pieces.append(f"Key signal: `{highlights[0]}`.")
+
+    related = [str(item.get("title") or "") for item in failed_steps if item is not step and item.get("title")]
+    if related:
+        pieces.append(f"Related failed probes: {', '.join(related[:2])}.")
+    return " ".join(pieces)
+
+
+def _build_failure_reasoning(
+    step: dict[str, Any],
+    *,
+    classification: str,
+    highlights: list[str],
+    doctor_result: dict[str, Any],
+) -> list[str]:
+    reasoning: list[str] = []
+    title = str(step.get("title") or "Execution step")
+    command = step.get("command_preview")
+    if isinstance(command, str) and command:
+        reasoning.append(f"{title} ran `{_shorten(command, limit=120)}` and exited with code {step.get('exit_code', '--')}.")
+    elif step.get("current_url"):
+        reasoning.append(f"{title} targeted `{step.get('current_url')}` and returned a failed browser/runtime result.")
+
+    if highlights:
+        reasoning.append(f"The highest-signal captured line was `{highlights[0]}`.")
+
+    classification_reason = {
+        "dependency_or_install": "That signal points to a dependency or install gap rather than a feature-level regression.",
+        "missing_toolchain": "That pattern usually means the runtime is missing the required executable instead of the repo logic being broken.",
+        "repo_not_ready": "The probe could not find the repo markers needed to run the requested verification flow from this workspace root.",
+        "script_or_manifest_missing": "The repo surface exists, but the expected script or manifest entrypoint was not present for this verification path.",
+        "code_or_config_failure": "The command started correctly, so the failure is more likely inside repo code or configuration than local tool discovery.",
+        "browser_or_runtime_failure": "The failure surfaced in browser navigation, page capture, or runtime infrastructure rather than a pure CLI script path.",
+        "unknown": "The evidence shows a failure, but the captured output is still too generic to narrow it further.",
+    }[classification]
+    reasoning.append(classification_reason)
+
+    install_guidance = doctor_result.get("install_guidance") or []
+    if classification in {"missing_toolchain", "repo_not_ready"} and install_guidance:
+        reasoning.append(f"Doctor guidance already points at the next repair lane: {install_guidance[0]}")
+
+    return _dedupe_lines(reasoning)[:4]
+
+
+def analyze_failure_state(
+    *,
+    doctor_result: dict[str, Any],
+    trace_steps: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    failed_steps = [step for step in trace_steps if step.get("status") == "failed"]
+    if not failed_steps:
+        return None
+
+    primary = failed_steps[0]
+    highlights = _extract_high_signal_lines(
+        str(primary.get("stderr_excerpt") or ""),
+        str(primary.get("output_excerpt") or ""),
+        str(primary.get("summary") or ""),
+        str(primary.get("command_preview") or ""),
+    )
+    if not highlights:
+        fallback_label = str(primary.get("summary") or primary.get("title") or "Failed execution step").strip()
+        if fallback_label:
+            highlights = [fallback_label]
+    classification = _classify_failure(primary, doctor_result=doctor_result)
+    return {
+        "failed_step_title": primary.get("title"),
+        "failed_step_kind": primary.get("kind"),
+        "primary_runtime_execution_id": primary.get("runtime_execution_id"),
+        "failure_classification": classification,
+        "failure_summary": _build_failure_summary(primary, classification=classification, highlights=highlights, failed_steps=failed_steps),
+        "stderr_highlights": highlights,
+        "grounded_next_step_reasoning": _build_failure_reasoning(
+            primary,
+            classification=classification,
+            highlights=highlights,
+            doctor_result=doctor_result,
+        ),
+        "failed_step_count": len(failed_steps),
+    }
+
+
 def build_recommended_next_actions(
     scenario_tag: str,
     *,
     doctor_result: dict[str, Any],
     trace_steps: list[dict[str, Any]],
     search_term: str | None,
+    failure_state: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     machine_summary = doctor_result.get("machine_summary") or {}
     workspace = doctor_result.get("workspace") or {}
@@ -562,6 +790,51 @@ def build_recommended_next_actions(
     if machine_summary.get("status") in {"degraded", "missing"} or workspace.get("status") in {"degraded", "missing"}:
         if install_guidance:
             actions.append({"label": install_guidance[0], "reason": "Local readiness is not fully satisfied."})
+
+    if failure_state:
+        classification = str(failure_state.get("failure_classification") or "unknown")
+        if classification == "dependency_or_install":
+            actions.append(
+                {
+                    "label": "Restore workspace dependencies, then rerun the same verification probe.",
+                    "reason": failure_state.get("failure_summary") or "The failure looks like an install or dependency gap.",
+                }
+            )
+        elif classification == "missing_toolchain":
+            actions.append(
+                {
+                    "label": install_guidance[0] if install_guidance else "Install the missing local toolchain, then rerun the probe.",
+                    "reason": failure_state.get("failure_summary") or "The active runtime is missing the required executable.",
+                }
+            )
+        elif classification == "script_or_manifest_missing":
+            actions.append(
+                {
+                    "label": "Confirm the expected script or manifest entrypoint before retrying this lane.",
+                    "reason": failure_state.get("failure_summary") or "The repo does not expose the expected verification entrypoint.",
+                }
+            )
+        elif classification == "repo_not_ready":
+            actions.append(
+                {
+                    "label": "Point DreamAxis at the correct repo root or add the missing workspace markers before retrying.",
+                    "reason": failure_state.get("failure_summary") or "The workspace root does not match the requested verification path yet.",
+                }
+            )
+        elif classification == "browser_or_runtime_failure":
+            actions.append(
+                {
+                    "label": "Open the failing runtime capture and confirm the local route or page is reachable.",
+                    "reason": failure_state.get("failure_summary") or "The failure came from the browser/runtime layer.",
+                }
+            )
+        else:
+            actions.append(
+                {
+                    "label": "Inspect the failing command output and narrow the next debugging step to that specific failure surface.",
+                    "reason": failure_state.get("failure_summary") or "At least one captured probe failed.",
+                }
+            )
 
     if failed_step:
         actions.append(
@@ -625,6 +898,7 @@ def build_proposal(
     search_term: str | None,
     trace_steps: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
+    failure_state: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     if mode != "propose_fix":
         return None
@@ -657,11 +931,31 @@ def build_proposal(
     if search_term and all(existing["file_path"] != search_term for existing in targets):
         targets.insert(0, {"file_path": search_term, "reason": "The prompt pointed to this route, module, or symbol."})
 
+    if not targets:
+        failed_step = next((step for step in trace_steps if step.get("status") == "failed"), None)
+        if isinstance(failed_step, dict):
+            fallback_target = (
+                failed_step.get("current_url")
+                or failed_step.get("cwd")
+                or failed_step.get("path")
+                or "(workspace root / runtime binding)"
+            )
+            targets.append(
+                {
+                    "file_path": str(fallback_target),
+                    "reason": f"{failed_step.get('title') or 'The failing step'} did not expose a narrower file target, so start from this failure surface.",
+                }
+            )
+
     failed_titles = [step.get("title") for step in trace_steps if step.get("status") == "failed"]
     summary = (
-        "Collected runtime evidence and converted it into a grounded repair proposal."
-        if failed_titles
-        else "Collected repository evidence and prepared a proposal-only next repair pass."
+        str(failure_state.get("failure_summary"))
+        if failure_state and failure_state.get("failure_summary")
+        else (
+            "Collected runtime evidence and converted it into a grounded repair proposal."
+            if failed_titles
+            else "Collected repository evidence and prepared a proposal-only next repair pass."
+        )
     )
     patch_summary_parts = []
     if search_term:
@@ -680,6 +974,9 @@ def build_proposal(
             f"{target_list}\n"
             "- Apply the smallest change that resolves the captured failure while preserving existing verified behavior."
         )
+
+    if failure_state and failure_state.get("grounded_next_step_reasoning"):
+        patch_summary = f"{patch_summary} {' '.join(str(item) for item in failure_state['grounded_next_step_reasoning'][:2])}".strip()
 
     return {
         "status": "proposal_only",
@@ -760,6 +1057,28 @@ def build_repo_copilot_response_prompt(trace: dict[str, Any]) -> str:
         for item in evidence:
             lines.append(f"- {item.get('title')}: {item.get('content')}")
 
+    failure_summary = trace.get("failure_summary")
+    failure_classification = trace.get("failure_classification")
+    stderr_highlights = trace.get("stderr_highlights") or []
+    grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
+    if failure_summary:
+        lines.extend(
+            [
+                "",
+                "Troubleshooting summary:",
+                f"- failure_summary: {failure_summary}",
+                f"- failure_type: {FAILURE_CLASSIFICATION_LABELS.get(str(failure_classification), str(failure_classification or 'Unknown'))}",
+            ]
+        )
+        if stderr_highlights:
+            lines.append("- stderr_highlights:")
+            for item in stderr_highlights:
+                lines.append(f"  - {item}")
+        if grounded_reasoning:
+            lines.append("- grounded_next_step_reasoning:")
+            for item in grounded_reasoning:
+                lines.append(f"  - {item}")
+
     recommendations = trace.get("recommended_next_actions") or []
     if recommendations:
         lines.extend(["", "Recommended next actions:"])
@@ -798,7 +1117,19 @@ def build_repo_copilot_fallback_response(trace: dict[str, Any]) -> str:
     sections.append("\n".join(ran) or "- No runtime probes were executed.")
 
     sections.extend(["", REPO_COPILOT_HEADINGS[2]])
+    failure_summary = trace.get("failure_summary")
+    failure_classification = trace.get("failure_classification")
+    stderr_highlights = trace.get("stderr_highlights") or []
+    grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
     evidence = []
+    if failure_summary:
+        label = FAILURE_CLASSIFICATION_LABELS.get(str(failure_classification), str(failure_classification or "Unknown"))
+        evidence.append(f"- Failure summary: {failure_summary}")
+        evidence.append(f"- Failure type: {label}")
+        for item in stderr_highlights[:3]:
+            evidence.append(f"- Stderr highlight: {item}")
+        for item in grounded_reasoning[:3]:
+            evidence.append(f"- Why this likely failed: {item}")
     for item in trace.get("evidence", []):
         evidence.append(f"- {item.get('title')}: {item.get('content')}")
     sections.append("\n".join(evidence) or "- No grounded evidence was collected.")
@@ -863,6 +1194,26 @@ def normalize_repo_copilot_response(content: str, trace: dict[str, Any] | None) 
         body = (parsed_sections.get(heading) or "").strip()
         if not body:
             body = fallback_sections.get(heading, "").strip()
+
+        if heading == "## What was found" and trace.get("failure_summary"):
+            failure_summary = str(trace.get("failure_summary"))
+            failure_label = FAILURE_CLASSIFICATION_LABELS.get(
+                str(trace.get("failure_classification") or ""),
+                str(trace.get("failure_classification") or "Unknown"),
+            )
+            stderr_highlights = [str(item) for item in (trace.get("stderr_highlights") or []) if str(item).strip()]
+            grounded_reasoning = [
+                str(item) for item in (trace.get("grounded_next_step_reasoning") or []) if str(item).strip()
+            ]
+            failure_lines = [
+                f"- Failure summary: {failure_summary}",
+                f"- Failure type: {failure_label}",
+            ]
+            failure_lines.extend(f"- Stderr highlight: {item}" for item in stderr_highlights[:3])
+            failure_lines.extend(f"- Why this likely failed: {item}" for item in grounded_reasoning[:3])
+            failure_block = "\n".join(failure_lines)
+            if failure_summary.lower() not in body.lower():
+                body = f"{failure_block}\n{body}".strip()
 
         if heading == "## What was found" and loose_model_summary:
             evidence_already_present = loose_model_summary in body
@@ -954,6 +1305,8 @@ async def _run_cli_probe(
             {
                 "status": "succeeded" if exit_code == 0 else "failed",
                 "output_excerpt": combined_excerpt,
+                "stdout_excerpt": stdout or None,
+                "stderr_excerpt": stderr or None,
                 "exit_code": exit_code,
                 "runtime_session_id": result.get("runtime_session_id"),
                 "cwd": result.get("cwd"),
@@ -998,7 +1351,14 @@ async def _run_cli_probe(
             )
         return step, evidence
     except Exception as exc:
-        step.update({"status": "failed", "output_excerpt": str(exc)})
+        step.update(
+            {
+                "status": "failed",
+                "output_excerpt": str(exc),
+                "stderr_excerpt": str(exc),
+                "exit_code": -1,
+            }
+        )
         await mark_runtime_failed(
             session,
             child_execution,
@@ -1094,6 +1454,7 @@ async def _run_browser_probe(
                 "runtime_session_id": result.get("runtime_session_id"),
                 "artifact_summaries": artifact_summaries,
                 "current_url": result.get("current_url"),
+                "stdout_excerpt": extracted_text or None,
             }
         )
         evidence = {
@@ -1122,7 +1483,21 @@ async def _run_browser_probe(
         )
         return step, evidence
     except Exception as exc:
-        step.update({"status": "failed", "output_excerpt": str(exc)})
+        failed_url: str | None = None
+        if actions:
+            first_action = actions[0]
+            url_candidate = first_action.get("url")
+            if isinstance(url_candidate, str) and url_candidate:
+                failed_url = url_candidate
+        step.update(
+            {
+                "status": "failed",
+                "output_excerpt": str(exc),
+                "stderr_excerpt": str(exc),
+                "exit_code": -1,
+                "current_url": failed_url,
+            }
+        )
         await mark_runtime_failed(
             session,
             child_execution,
@@ -1362,11 +1737,17 @@ async def collect_repo_copilot_trace(
             trace_steps.append(step)
             evidence.append(evidence_item)
 
+    failure_state = analyze_failure_state(
+        doctor_result=doctor_result,
+        trace_steps=trace_steps,
+    )
+
     recommended_next_actions = build_recommended_next_actions(
         scenario_tag,
         doctor_result=doctor_result,
         trace_steps=trace_steps,
         search_term=search_term,
+        failure_state=failure_state,
     )
     proposal = build_proposal(
         mode=resolved_mode,
@@ -1374,6 +1755,7 @@ async def collect_repo_copilot_trace(
         search_term=search_term,
         trace_steps=trace_steps,
         evidence=evidence,
+        failure_state=failure_state,
     )
 
     runtime_execution_ids = [step.get("runtime_execution_id") for step in trace_steps if step.get("runtime_execution_id")]
@@ -1448,6 +1830,10 @@ async def collect_repo_copilot_trace(
         "recommended_next_actions": recommended_next_actions,
         "runtime_execution_ids": runtime_execution_ids,
         "artifact_summaries": artifact_summaries,
+        "failure_summary": failure_state.get("failure_summary") if failure_state else None,
+        "failure_classification": failure_state.get("failure_classification") if failure_state else None,
+        "stderr_highlights": list(failure_state.get("stderr_highlights") or []) if failure_state else [],
+        "grounded_next_step_reasoning": list(failure_state.get("grounded_next_step_reasoning") or []) if failure_state else [],
         "planned_actions": planned_actions,
         "actual_events": actual_events,
         "timeline": timeline,

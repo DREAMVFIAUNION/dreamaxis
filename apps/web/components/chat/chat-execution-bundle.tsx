@@ -3,6 +3,16 @@
 import Link from "next/link";
 import type { ChatExecutionTrace, ChatEvidenceItem, RuntimeExecution } from "@dreamaxis/client";
 
+const FAILURE_TYPE_LABELS: Record<string, string> = {
+  dependency_or_install: "Dependency / install",
+  missing_toolchain: "Missing toolchain",
+  repo_not_ready: "Repo not ready",
+  script_or_manifest_missing: "Script / manifest missing",
+  code_or_config_failure: "Code / config failure",
+  browser_or_runtime_failure: "Browser / runtime failure",
+  unknown: "Unknown",
+};
+
 function tone(value?: string | null) {
   const v = (value ?? "").toLowerCase();
   if (v.includes("fail") || v.includes("error") || v.includes("missing")) return "border-red-400/30 bg-red-500/10 text-red-200";
@@ -77,7 +87,10 @@ function renderEvidence(evidence: ChatEvidenceItem, runtimeIndex: Map<string, Ru
         {evidence.label ? <p>label: {evidence.label}</p> : null}
       </div>
       {evidence.stderr_excerpt ? (
-        <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{evidence.stderr_excerpt}</pre>
+        <details className="mt-3 border border-red-400/20 bg-red-500/5 px-3 py-2">
+          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-red-200">stderr excerpt</summary>
+          <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{evidence.stderr_excerpt}</pre>
+        </details>
       ) : null}
       {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
     </div>
@@ -96,6 +109,11 @@ export function ChatExecutionBundle({
   const currentMode = trace.mode_summary?.active_mode ?? trace.mode;
   const bundleId = trace.execution_bundle_id ?? parentExecutionId ?? "--";
   const evidenceItems = trace.evidence_items ?? trace.evidence ?? [];
+  const failureSummary = trace.failure_summary?.trim();
+  const failureType = trace.failure_classification?.trim() ?? "";
+  const stderrHighlights = (trace.stderr_highlights ?? []).filter(Boolean);
+  const groundedReasoning = (trace.grounded_next_step_reasoning ?? []).filter(Boolean);
+  const failureLabel = FAILURE_TYPE_LABELS[failureType] ?? (failureType ? failureType.replaceAll("_", " ") : "Unknown");
 
   return (
     <div className="space-y-4">
@@ -181,7 +199,38 @@ export function ChatExecutionBundle({
           <p className="text-[10px] uppercase tracking-[0.2em] text-signal">What was found</p>
           <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{evidenceItems.length} evidence items</span>
         </div>
-        <div className="mt-3 space-y-3">{evidenceItems.map((item) => renderEvidence(item, runtimeIndex))}</div>
+        <div className="mt-3 space-y-3">
+          {failureSummary ? (
+            <div className="border border-red-400/25 bg-red-500/10 px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Failure summary</p>
+                <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone("failed")}`}>{failureLabel}</span>
+              </div>
+              <p className="mt-3 text-sm leading-7 text-ink">{failureSummary}</p>
+              {groundedReasoning.length ? (
+                <div className="mt-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Why this likely failed</p>
+                  <ul className="mt-2 space-y-2 text-xs leading-6 text-ink">
+                    {groundedReasoning.map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {stderrHighlights.length ? (
+                <details className="mt-4 border border-red-400/20 bg-black/20 px-3 py-2">
+                  <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-red-100">stderr highlights</summary>
+                  <ul className="mt-3 space-y-2 text-xs leading-6 text-red-100">
+                    {stderrHighlights.map((item) => (
+                      <li key={item}>- {item}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+          {evidenceItems.map((item) => renderEvidence(item, runtimeIndex))}
+        </div>
       </div>
 
       {trace.proposal ? (

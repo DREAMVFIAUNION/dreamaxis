@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -45,8 +46,18 @@ class Runner:
         return {"Authorization": f"Bearer {self.token}"}
 
     def bootstrap(self) -> None:
-        payload = self.client.post("/api/v1/auth/bootstrap").json()
-        self.token = payload["data"]["access_token"]
+        last_error: Exception | None = None
+        for _ in range(10):
+            try:
+                payload = self.client.post("/api/v1/auth/bootstrap")
+                payload.raise_for_status()
+                data = payload.json()
+                self.token = data["data"]["access_token"]
+                return
+            except (httpx.HTTPError, httpx.RemoteProtocolError, KeyError) as exc:
+                last_error = exc
+                time.sleep(1)
+        raise RuntimeError("Failed to bootstrap local auth session for acceptance run.") from last_error
 
     def ensure_connection(self) -> None:
         items = self.client.get("/api/v1/provider-connections", headers=self.headers).json()["data"]
@@ -122,6 +133,7 @@ class Runner:
         runtime_execution_ids = finish.get("runtime_execution_ids") or start.get("runtime_execution_ids") or []
         proposal = finish.get("proposal") or start.get("proposal") or trace.get("proposal")
         notes: list[str] = []
+        failed_steps = [step for step in steps if step.get("status") == "failed"] if (steps := trace.get("steps") or []) else []
 
         mode_ok = str(trace.get("mode") or finish.get("mode") or start.get("mode") or "") == scenario.mode
         if not mode_ok:
@@ -152,11 +164,31 @@ class Runner:
             notes.append("proposal payload appeared on a non-proposal scenario")
 
         browser_ok = True
-        steps = trace.get("steps") or []
         if scenario.expect_browser:
             browser_ok = any(step.get("kind") == "browser" and step.get("status") in {"succeeded", "failed"} for step in steps)
             if not browser_ok:
                 notes.append("verify scenario did not invoke browser runtime")
+
+        troubleshooting_ok = True
+        if failed_steps:
+            failure_summary = trace.get("failure_summary")
+            failure_classification = trace.get("failure_classification")
+            stderr_highlights = trace.get("stderr_highlights") or []
+            grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
+            troubleshooting_ok = bool(
+                failure_summary
+                and failure_classification
+                and stderr_highlights
+                and grounded_reasoning
+            )
+            if not failure_summary:
+                notes.append("failed trace missing failure_summary")
+            if not failure_classification:
+                notes.append("failed trace missing failure_classification")
+            if not stderr_highlights:
+                notes.append("failed trace missing stderr_highlights")
+            if not grounded_reasoning:
+                notes.append("failed trace missing grounded_next_step_reasoning")
 
         runtime_link_ok = True
         parent_payload: dict[str, Any] | None = None
@@ -186,7 +218,7 @@ class Runner:
         if not safety_ok:
             notes.append("safety summary did not confirm blocked writes / proposal-only mode")
 
-        overall_ok = all([mode_ok, sse_ok, sections_ok, trace_ok, evidence_ok, proposal_ok, browser_ok, runtime_link_ok, safety_ok])
+        overall_ok = all([mode_ok, sse_ok, sections_ok, trace_ok, evidence_ok, proposal_ok, browser_ok, troubleshooting_ok, runtime_link_ok, safety_ok])
         return {
             "repo": scenario.repo_label,
             "workspace_label": scenario.workspace_label,
@@ -203,6 +235,7 @@ class Runner:
             "evidence_ok": evidence_ok,
             "proposal_ok": proposal_ok,
             "browser_ok": browser_ok,
+            "troubleshooting_ok": troubleshooting_ok,
             "runtime_link_ok": runtime_link_ok,
             "safety_ok": safety_ok,
             "notes": notes,
@@ -231,15 +264,15 @@ class Runner:
             "",
             "## Scenario matrix",
             "",
-            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Runtime linkage | Safety | Notes |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Runtime linkage | Safety | Notes |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for item in self.results:
             notes = "<br>".join(item["notes"]) if item["notes"] else "ok"
             lines.append(
                 f"| {item['repo']} | {item['scenario']} | `{item['mode']}` | {'PASS' if item['ok'] else 'FAIL'} | "
                 f"{'ok' if item['mode_ok'] else 'fail'} | {'ok' if item['trace_ok'] else 'fail'} | {'ok' if item['evidence_ok'] else 'fail'} | "
-                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
+                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['troubleshooting_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
             )
         lines.extend([
             "",

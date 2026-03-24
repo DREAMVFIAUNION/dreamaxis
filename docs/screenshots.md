@@ -71,5 +71,6 @@ Try to keep screenshots:
 
 Latest refresh notes:
 
+- `2026-03-24`: `dreamaxis-chat.png` refreshed from the troubleshooting summarizer acceptance pass with failure summary + execution cards
 - `2026-03-23`: `dreamaxis-chat.png` refreshed from the v0.2 verify lane acceptance pass
 - `2026-03-23`: `dreamaxis-runtime.png` refreshed from the v0.2 runtime control plane after bundle-aware acceptance
