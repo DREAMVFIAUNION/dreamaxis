@@ -216,6 +216,39 @@ export interface ChatRecommendedAction {
   reason?: string | null;
 }
 
+export interface GroundingSignal {
+  id: string;
+  kind: string;
+  label: string;
+  value: string;
+  source_layer: "request" | "workspace" | "repo" | "runtime" | "browser" | "knowledge" | string;
+  status?: "ready" | "observed" | "warning" | string;
+  reason?: string | null;
+}
+
+export interface GroundedTarget {
+  type: "workspace" | "route" | "module" | "command" | "runtime" | "file" | "browser" | string;
+  label: string;
+  value: string;
+  reason: string;
+  source_signal_ids?: string[];
+  status?: "primary" | "candidate" | "observed" | string;
+}
+
+export interface ChatGroundingSummary {
+  headline: string;
+  summary: string;
+  signals: GroundingSignal[];
+}
+
+export interface ChatReflectionSummary {
+  triggered: boolean;
+  summary: string;
+  reason?: string | null;
+  next_probe?: string | null;
+  confidence?: number | null;
+}
+
 export interface ChatProposalTarget {
   file_path: string;
   reason: string;
@@ -272,6 +305,12 @@ export interface ChatExecutionTrace {
   scenario_label: string;
   router_reason: string;
   intent_plan: string[];
+  grounding_summary?: ChatGroundingSummary | null;
+  grounded_targets?: GroundedTarget[];
+  primary_grounded_target?: GroundedTarget | null;
+  reflection_summary?: ChatReflectionSummary | null;
+  reflection_reason?: string | null;
+  reflection_next_probe?: string | null;
   primary_failure_target?: string | null;
   failure_summary?: string | null;
   failure_classification?: string | null;

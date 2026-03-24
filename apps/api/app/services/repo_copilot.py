@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -253,6 +254,454 @@ def build_intent_plan(
         "Preview the primary README or architecture notes for grounding.",
         "Summarize entrypoints, key modules, and likely launch commands with citations to local files.",
     ]
+
+
+def _safe_signal_id(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return normalized[:48] or "signal"
+
+
+def _make_grounding_signal(
+    *,
+    kind: str,
+    label: str,
+    value: str,
+    source_layer: str,
+    status: str = "observed",
+    reason: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": f"{kind}-{_safe_signal_id(label)}-{_safe_signal_id(value)}",
+        "kind": kind,
+        "label": label,
+        "value": value,
+        "source_layer": source_layer,
+        "status": status,
+        "reason": reason,
+    }
+
+
+def _make_grounded_target(
+    *,
+    target_type: str,
+    label: str,
+    value: str,
+    reason: str,
+    source_signal_ids: list[str] | None = None,
+    status: str = "candidate",
+) -> dict[str, Any]:
+    return {
+        "type": target_type,
+        "label": label,
+        "value": value,
+        "reason": reason,
+        "source_signal_ids": source_signal_ids or [],
+        "status": status,
+    }
+
+
+def _collect_path_candidates(*texts: str | None, limit: int = 4) -> list[str]:
+    matches: list[str] = []
+    patterns = [
+        r"([A-Za-z0-9_./\\-]+(?:package\.json|pnpm-workspace\.yaml|pyproject\.toml|requirements(?:-dev)?\.txt|Dockerfile|docker-compose(?:\.ya?ml)?|README\.md))",
+        r"([A-Za-z0-9_./\\-]+(?:\.tsx|\.ts|\.js|\.jsx|\.py|\.md))",
+    ]
+    for text in texts:
+        if not text:
+            continue
+        for pattern in patterns:
+            for match in re.findall(pattern, text, flags=re.IGNORECASE):
+                candidate = str(match).strip().rstrip(".,:;)")
+                if candidate and candidate not in matches:
+                    matches.append(candidate)
+                if len(matches) >= limit:
+                    return matches
+    return matches
+
+
+def _has_probe_title(trace_steps: list[dict[str, Any]], title: str) -> bool:
+    return any(str(step.get("title") or "") == title for step in trace_steps)
+
+
+async def _load_recent_failed_runtime_targets(
+    session: AsyncSession,
+    *,
+    workspace_id: str,
+    limit: int = 3,
+) -> list[RuntimeExecution]:
+    result = await session.scalars(
+        select(RuntimeExecution)
+        .where(RuntimeExecution.workspace_id == workspace_id, RuntimeExecution.status == "failed")
+        .order_by(RuntimeExecution.created_at.desc())
+        .limit(limit)
+    )
+    return list(result)
+
+
+def _build_initial_grounding_context(
+    *,
+    workspace: Workspace,
+    prompt: str,
+    scenario_tag: str,
+    search_term: str | None,
+    browser_url: str | None,
+    doctor_result: dict[str, Any],
+    runtimes: list[Any],
+    recent_failed_executions: list[RuntimeExecution],
+    knowledge_sources: list[KnowledgeChunkReference] | None,
+) -> dict[str, Any]:
+    signals: list[dict[str, Any]] = []
+    targets: list[dict[str, Any]] = []
+
+    workspace_root = str(workspace.workspace_root_path or ".")
+    workspace_signal = _make_grounding_signal(
+        kind="workspace_root",
+        label="Workspace root",
+        value=workspace_root,
+        source_layer="workspace",
+        status="ready",
+        reason="Chat execution is scoped to this workspace root.",
+    )
+    signals.append(workspace_signal)
+    targets.append(
+        _make_grounded_target(
+            target_type="workspace",
+            label="Workspace root",
+            value=workspace_root,
+            reason="The active chat turn is bound to this workspace.",
+            source_signal_ids=[workspace_signal["id"]],
+        )
+    )
+
+    workspace_status = str(((doctor_result.get("workspace") or {}).get("status")) or "unknown")
+    workspace_readiness_signal = _make_grounding_signal(
+        kind="workspace_readiness",
+        label="Workspace readiness",
+        value=workspace_status,
+        source_layer="workspace",
+        status="warning" if workspace_status in {"degraded", "missing"} else "ready",
+        reason=_doctor_summary_label(doctor_result),
+    )
+    signals.append(workspace_readiness_signal)
+
+    machine_status = str(((doctor_result.get("machine_summary") or {}).get("status")) or "unknown")
+    signals.append(
+        _make_grounding_signal(
+            kind="machine_readiness",
+            label="Machine baseline",
+            value=machine_status,
+            source_layer="workspace",
+            status="warning" if machine_status in {"degraded", "missing"} else "ready",
+            reason="Environment doctor supplies the baseline host readiness state.",
+        )
+    )
+
+    if search_term:
+        search_signal = _make_grounding_signal(
+            kind="request_target",
+            label="Prompt target",
+            value=search_term,
+            source_layer="request",
+            status="observed",
+            reason="The prompt names this route, module, command, or error surface.",
+        )
+        signals.append(search_signal)
+        target_type = "route" if search_term.startswith("/") else "module"
+        targets.append(
+            _make_grounded_target(
+                target_type=target_type,
+                label="Prompt target",
+                value=search_term,
+                reason="Route initial probes around the explicit prompt target first.",
+                source_signal_ids=[search_signal["id"]],
+                status="primary",
+            )
+        )
+
+    if browser_url:
+        browser_signal = _make_grounding_signal(
+            kind="browser_target",
+            label="Browser target",
+            value=browser_url,
+            source_layer="request",
+            status="observed",
+            reason="The prompt implies a browser-verifiable route or page surface.",
+        )
+        signals.append(browser_signal)
+        targets.append(
+            _make_grounded_target(
+                target_type="browser",
+                label="Browser target",
+                value=browser_url,
+                reason="Use browser runtime evidence for this route or page when verify/troubleshoot needs UI proof.",
+                source_signal_ids=[browser_signal["id"]],
+                status="primary" if not search_term else "candidate",
+            )
+        )
+
+    runtime_types = sorted({str(getattr(runtime, "runtime_type", "") or "") for runtime in runtimes if getattr(runtime, "runtime_type", None)})
+    if runtime_types:
+        runtime_signal = _make_grounding_signal(
+            kind="runtime_inventory",
+            label="Available runtimes",
+            value=", ".join(runtime_types),
+            source_layer="runtime",
+            status="ready",
+            reason="Probe selection should respect the currently registered runtime surfaces.",
+        )
+        signals.append(runtime_signal)
+
+    for execution in recent_failed_executions[:2]:
+        preview = _shorten(execution.command_preview or execution.error_message or execution.prompt_preview, limit=120)
+        if not preview:
+            continue
+        failure_signal = _make_grounding_signal(
+            kind="recent_failure",
+            label=f"Recent failed execution {execution.id}",
+            value=preview,
+            source_layer="runtime",
+            status="warning",
+            reason="Recent failed runtime executions can narrow the next troubleshooting pass.",
+        )
+        signals.append(failure_signal)
+
+    if knowledge_sources:
+        names = ", ".join(source.document_name for source in knowledge_sources[:3])
+        signals.append(
+            _make_grounding_signal(
+                kind="knowledge_context",
+                label="Knowledge grounding",
+                value=names,
+                source_layer="knowledge",
+                status="observed",
+                reason="Knowledge snippets were attached for this turn.",
+            )
+        )
+
+    if not targets:
+        targets.append(
+            _make_grounded_target(
+                target_type="workspace",
+                label="Scenario focus",
+                value=scenario_tag,
+                reason="No narrower request target was detected, so start from workspace-level grounding.",
+                source_signal_ids=[workspace_signal["id"], workspace_readiness_signal["id"]],
+                status="primary",
+            )
+        )
+
+    summary = (
+        f"Grounding starts from {workspace_root} with workspace readiness `{workspace_status}`"
+        + (f", prompt target `{search_term}`" if search_term else "")
+        + (f", and browser target `{browser_url}`" if browser_url else "")
+        + "."
+    )
+    return {
+        "headline": "Grounding context",
+        "summary": summary,
+        "signals": signals,
+        "grounded_targets": targets,
+        "primary_grounded_target": targets[0] if targets else None,
+    }
+
+
+def _enrich_grounding_context_from_trace(
+    grounding_context: dict[str, Any],
+    *,
+    trace_steps: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+) -> dict[str, Any]:
+    signals = list(grounding_context.get("signals") or [])
+    targets = list(grounding_context.get("grounded_targets") or [])
+    seen_target_values = {str(item.get("value")) for item in targets if item.get("value")}
+
+    for step in trace_steps:
+        title = str(step.get("title") or "")
+        current_url = step.get("current_url")
+        if isinstance(current_url, str) and current_url and current_url not in seen_target_values:
+            targets.append(
+                _make_grounded_target(
+                    target_type="browser",
+                    label=title or "Observed browser target",
+                    value=current_url,
+                    reason="Runtime execution captured this active browser target.",
+                    status="observed",
+                )
+            )
+            seen_target_values.add(current_url)
+
+        for candidate in _collect_path_candidates(
+            str(step.get("output_excerpt") or ""),
+            str(step.get("stderr_excerpt") or ""),
+            str(step.get("summary") or ""),
+            str(step.get("command_preview") or ""),
+        ):
+            if candidate in seen_target_values:
+                continue
+            targets.append(
+                _make_grounded_target(
+                    target_type="file",
+                    label=title or "Observed file target",
+                    value=candidate,
+                    reason="A runtime probe surfaced this file or manifest as relevant evidence.",
+                    status="observed",
+                )
+            )
+            seen_target_values.add(candidate)
+
+    for item in evidence:
+        current_url = item.get("current_url")
+        if isinstance(current_url, str) and current_url and current_url not in seen_target_values:
+            targets.append(
+                _make_grounded_target(
+                    target_type="browser",
+                    label=str(item.get("title") or "Evidence target"),
+                    value=current_url,
+                    reason="Evidence items reference this browser target.",
+                    status="observed",
+                )
+            )
+            seen_target_values.add(current_url)
+
+        for candidate in _collect_path_candidates(str(item.get("content") or ""), str(item.get("path") or "")):
+            if candidate in seen_target_values:
+                continue
+            targets.append(
+                _make_grounded_target(
+                    target_type="file",
+                    label=str(item.get("title") or "Evidence target"),
+                    value=candidate,
+                    reason="Evidence items point at this repo file or manifest.",
+                    status="observed",
+                )
+            )
+            seen_target_values.add(candidate)
+
+    if targets:
+        targets[0]["status"] = "primary"
+
+    summary = grounding_context.get("summary") or "Grounding context assembled from request, workspace, and runtime signals."
+    if len(targets) > 1:
+        summary = f"{summary} Observed {len(targets)} candidate grounded targets."
+
+    return {
+        **grounding_context,
+        "summary": summary,
+        "signals": signals,
+        "grounded_targets": targets,
+        "primary_grounded_target": targets[0] if targets else None,
+    }
+
+
+def _build_reflection_follow_up_steps(
+    *,
+    prompt: str,
+    search_term: str | None,
+    browser_url: str | None,
+    scenario_tag: str,
+    trace_steps: list[dict[str, Any]],
+    failure_state: dict[str, Any] | None,
+    grounding_context: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[PlannedStep]]:
+    targets = grounding_context.get("grounded_targets") or []
+    primary_target = str((grounding_context.get("primary_grounded_target") or {}).get("value") or "").strip()
+    classification = str(failure_state.get("failure_classification") or "unknown") if failure_state else "unknown"
+
+    if failure_state and classification in {"script_or_manifest_missing", "repo_not_ready", "missing_toolchain"}:
+        if not _has_probe_title(trace_steps, "Verification manifest probe") and not _has_probe_title(trace_steps, "Manifest inventory"):
+            return (
+                {
+                    "triggered": True,
+                    "summary": "Reflection shifted from a broad verification replay to manifest/readiness grounding.",
+                    "reason": "The initial failure suggests the workspace entrypoint or toolchain is the blocker, so narrowing to manifests/readiness is more useful than retrying the same probe.",
+                    "next_probe": "Verification manifest probe",
+                    "confidence": 0.86,
+                },
+                [_build_verify_manifest_probe()],
+            )
+
+    if failure_state and classification == "browser_or_runtime_failure" and search_term and not _has_probe_title(trace_steps, "Code search"):
+        return (
+            {
+                "triggered": True,
+                "summary": "Reflection shifted from browser/runtime evidence to repo trace grounding.",
+                "reason": "The browser failure did not fully explain whether the issue is route wiring or runtime access, so a code trace around the target is the next narrow probe.",
+                "next_probe": "Code search",
+                "confidence": 0.78,
+            },
+            _build_trace_steps(search_term)[:1],
+        )
+
+    if failure_state and classification in {"code_or_config_failure", "dependency_or_install"} and search_term and not _has_probe_title(trace_steps, "Code search"):
+        return (
+            {
+                "triggered": True,
+                "summary": "Reflection added a focused repo trace after the failing verification command.",
+                "reason": "The command reached repo execution, so the next best probe is a narrower trace around the grounded target instead of another generic replay.",
+                "next_probe": "Code search",
+                "confidence": 0.74,
+            },
+            _build_trace_steps(search_term)[:1],
+        )
+
+    if not failure_state and scenario_tag == "run_verification_workflow" and browser_url and not _has_probe_title(trace_steps, "Browser capture"):
+        return (
+            {
+                "triggered": True,
+                "summary": "Reflection added browser capture because the initial probes did not collect UI evidence.",
+                "reason": "The request implies a page-level verification target, so the answer is not grounded enough without browser evidence.",
+                "next_probe": "Browser capture",
+                "confidence": 0.8,
+            },
+            [
+                PlannedStep(
+                    kind="browser",
+                    title="Browser reflection capture",
+                    summary=f"Open `{browser_url}` and collect extract-text plus screenshot evidence for the requested page.",
+                    actions=[
+                        {"action": "open_url", "url": browser_url},
+                        {"action": "wait_for", "time": 1.5},
+                        {"action": "extract_text"},
+                        {"action": "take_screenshot", "name": "repo-copilot-reflection"},
+                    ],
+                )
+            ],
+        )
+
+    if not failure_state and search_term and not _has_probe_title(trace_steps, "Code search"):
+        return (
+            {
+                "triggered": True,
+                "summary": "Reflection added a narrower target trace before composing the final answer.",
+                "reason": "The initial grounding identified a target, but the probe set still lacked a concrete repo trace tied to that target.",
+                "next_probe": "Code search",
+                "confidence": 0.67,
+            },
+            _build_trace_steps(search_term)[:1],
+        )
+
+    if primary_target and any(item.get("type") == "file" for item in targets):
+        return (
+            {
+                "triggered": False,
+                "summary": f"Reflection kept the current probe set because the grounded target `{primary_target}` was already evidenced.",
+                "reason": "The execution bundle already contains a concrete grounded target and does not need a second follow-up pass.",
+                "next_probe": None,
+                "confidence": 0.63,
+            },
+            [],
+        )
+
+    return (
+        {
+            "triggered": False,
+            "summary": "Reflection did not add a follow-up probe.",
+            "reason": "The initial probe set was already narrow enough for the current grounded target.",
+            "next_probe": None,
+            "confidence": 0.58,
+        },
+        [],
+    )
 
 
 def _build_readiness_probe() -> PlannedStep:
@@ -983,6 +1432,7 @@ def build_proposal(
     search_term: str | None,
     trace_steps: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
+    grounding_context: dict[str, Any] | None = None,
     failure_state: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     if mode != "propose_fix":
@@ -1016,6 +1466,19 @@ def build_proposal(
     if search_term and all(existing["file_path"] != search_term for existing in targets):
         targets.insert(0, {"file_path": search_term, "reason": "The prompt pointed to this route, module, or symbol."})
 
+    grounded_targets = list((grounding_context or {}).get("grounded_targets") or [])
+    for grounded_target in reversed(grounded_targets[:4]):
+        grounded_value = str(grounded_target.get("value") or "").strip()
+        if not grounded_value or any(existing["file_path"] == grounded_value for existing in targets):
+            continue
+        targets.insert(
+            0,
+            {
+                "file_path": grounded_value,
+                "reason": str(grounded_target.get("reason") or "Grounding identified this as a high-signal repair surface."),
+            },
+        )
+
     primary_failure_target = str(failure_state.get("primary_failure_target") or "").strip() if failure_state else ""
     if primary_failure_target and all(existing["file_path"] != primary_failure_target for existing in targets):
         targets.insert(
@@ -1023,6 +1486,16 @@ def build_proposal(
             {
                 "file_path": primary_failure_target,
                 "reason": "Troubleshooting identified this as the primary failure target to inspect first.",
+            },
+        )
+
+    primary_grounded_target = str(((grounding_context or {}).get("primary_grounded_target") or {}).get("value") or "").strip()
+    if primary_grounded_target and all(existing["file_path"] != primary_grounded_target for existing in targets):
+        targets.insert(
+            0,
+            {
+                "file_path": primary_grounded_target,
+                "reason": "Grounding narrowed the repair path to this primary target before proposal synthesis.",
             },
         )
 
@@ -1070,6 +1543,8 @@ def build_proposal(
             "- Apply the smallest change that resolves the captured failure while preserving existing verified behavior."
         )
 
+    if primary_grounded_target:
+        patch_summary = f"{patch_summary} Primary grounded target: `{primary_grounded_target}`.".strip()
     if failure_state and failure_state.get("grounded_next_step_reasoning"):
         patch_summary = f"{patch_summary} {' '.join(str(item) for item in failure_state['grounded_next_step_reasoning'][:2])}".strip()
 
@@ -1126,11 +1601,15 @@ def build_repo_copilot_response_prompt(trace: dict[str, Any]) -> str:
 
     readiness = trace.get("workspace_readiness") or {}
     machine_summary = trace.get("machine_summary") or {}
+    primary_grounded_target = (trace.get("primary_grounded_target") or {}).get("value")
+    grounding_summary = trace.get("grounding_summary") or {}
     lines.extend(
         [
             "",
             f"Machine readiness: {machine_summary.get('status', 'unknown')}",
             f"Workspace readiness: {readiness.get('status', 'unknown')}",
+            f"Grounding summary: {grounding_summary.get('summary', 'No grounding summary supplied.')}",
+            f"Primary grounded target: {primary_grounded_target or '--'}",
             "",
             "Execution trace:",
         ]
@@ -1178,6 +1657,20 @@ def build_repo_copilot_response_prompt(trace: dict[str, Any]) -> str:
                 lines.append(f"  - {item}")
 
     recommendations = trace.get("recommended_next_actions") or []
+    reflection_summary = trace.get("reflection_summary") or {}
+    if reflection_summary:
+        lines.extend(
+            [
+                "",
+                "Reflection summary:",
+                f"- triggered: {reflection_summary.get('triggered')}",
+                f"- summary: {reflection_summary.get('summary')}",
+            ]
+        )
+        if reflection_summary.get("reason"):
+            lines.append(f"- reason: {reflection_summary.get('reason')}")
+        if reflection_summary.get("next_probe"):
+            lines.append(f"- next_probe: {reflection_summary.get('next_probe')}")
     if recommendations:
         lines.extend(["", "Recommended next actions:"])
         for item in recommendations:
@@ -1215,12 +1708,18 @@ def build_repo_copilot_fallback_response(trace: dict[str, Any]) -> str:
     sections.append("\n".join(ran) or "- No runtime probes were executed.")
 
     sections.extend(["", REPO_COPILOT_HEADINGS[2]])
+    grounding_summary = trace.get("grounding_summary") or {}
+    primary_grounded_target = (trace.get("primary_grounded_target") or {}).get("value")
     failure_summary = trace.get("failure_summary")
     failure_classification = trace.get("failure_classification")
     primary_failure_target = trace.get("primary_failure_target")
     stderr_highlights = trace.get("stderr_highlights") or []
     grounded_reasoning = trace.get("grounded_next_step_reasoning") or []
     evidence = []
+    if grounding_summary:
+        evidence.append(f"- Grounding summary: {grounding_summary.get('summary')}")
+    if primary_grounded_target:
+        evidence.append(f"- Primary grounded target: {primary_grounded_target}")
     if failure_summary:
         label = FAILURE_CLASSIFICATION_LABELS.get(str(failure_classification), str(failure_classification or "Unknown"))
         evidence.append(f"- Failure summary: {failure_summary}")
@@ -1236,7 +1735,10 @@ def build_repo_copilot_fallback_response(trace: dict[str, Any]) -> str:
     sections.append("\n".join(evidence) or "- No grounded evidence was collected.")
 
     sections.extend(["", REPO_COPILOT_HEADINGS[3]])
+    reflection_summary = trace.get("reflection_summary") or {}
     next_steps = []
+    if reflection_summary:
+        next_steps.append(f"- Reflection: {reflection_summary.get('summary')}")
     for item in trace.get("recommended_next_actions", []):
         next_steps.append(f"- {item.get('label')}: {item.get('reason')}")
     sections.append("\n".join(next_steps) or "- Configure a provider connection to enable model-backed synthesis.")
@@ -1770,6 +2272,18 @@ async def collect_repo_copilot_trace(
     browser_url = extract_target_url(prompt)
     runtimes = await list_runtimes_for_workspace(session, workspace.id)
     doctor_result = build_doctor_result(workspace=workspace, runtimes=runtimes, default_workspace_id=workspace.id)
+    recent_failed_executions = await _load_recent_failed_runtime_targets(session, workspace_id=workspace.id)
+    grounding_context = _build_initial_grounding_context(
+        workspace=workspace,
+        prompt=prompt,
+        scenario_tag=scenario_tag,
+        search_term=search_term,
+        browser_url=browser_url,
+        doctor_result=doctor_result,
+        runtimes=runtimes,
+        recent_failed_executions=recent_failed_executions,
+        knowledge_sources=knowledge_sources,
+    )
 
     trace_steps: list[dict[str, Any]] = [
         {
@@ -1841,10 +2355,115 @@ async def collect_repo_copilot_trace(
             trace_steps.append(step)
             evidence.append(evidence_item)
 
+    grounding_context = _enrich_grounding_context_from_trace(
+        grounding_context,
+        trace_steps=trace_steps,
+        evidence=evidence,
+    )
+
     failure_state = analyze_failure_state(
         doctor_result=doctor_result,
         trace_steps=trace_steps,
     )
+    reflection_summary, follow_up_steps = _build_reflection_follow_up_steps(
+        prompt=prompt,
+        search_term=search_term,
+        browser_url=browser_url,
+        scenario_tag=scenario_tag,
+        trace_steps=trace_steps,
+        failure_state=failure_state,
+        grounding_context=grounding_context,
+    )
+    reflection_events: list[dict[str, Any]] = []
+    reflection_planned_actions: list[dict[str, Any]] = []
+
+    if follow_up_steps:
+        reflection_planned_actions = [
+            build_annotation(
+                annotation_id=f"reflection-plan-{index}",
+                kind="reflection_follow_up",
+                title=planned_step.title,
+                summary=planned_step.summary,
+                status="ready",
+                source_layer="chat",
+                payload_preview=planned_step.command if planned_step.kind == "cli" else {"actions": planned_step.actions or []},
+                target_label=str(
+                    planned_step.command
+                    if planned_step.kind == "cli"
+                    else ((planned_step.actions or [{}])[0].get("url") or planned_step.title)
+                ),
+            )
+            for index, planned_step in enumerate(follow_up_steps, start=1)
+        ]
+        for planned_step in follow_up_steps:
+            if planned_step.kind == "cli":
+                step, evidence_item = await _run_cli_probe(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=parent_execution,
+                    mode=resolved_mode,
+                    title=planned_step.title,
+                    summary=planned_step.summary,
+                    command=planned_step.command or "",
+                    working_directory=planned_step.working_directory,
+                )
+            else:
+                step, evidence_item = await _run_browser_probe(
+                    session,
+                    workspace=workspace,
+                    user=user,
+                    conversation=conversation,
+                    parent_execution=parent_execution,
+                    mode=resolved_mode,
+                    title=planned_step.title,
+                    summary=planned_step.summary,
+                    actions=planned_step.actions or [],
+                )
+            trace_steps.append(step)
+            evidence.append(evidence_item)
+        grounding_context = _enrich_grounding_context_from_trace(
+            grounding_context,
+            trace_steps=trace_steps,
+            evidence=evidence,
+        )
+        failure_state = analyze_failure_state(
+            doctor_result=doctor_result,
+            trace_steps=trace_steps,
+        )
+        reflection_events.append(
+            build_annotation(
+                annotation_id="reflection-summary",
+                kind="reflection_follow_up",
+                title="Reflection pass",
+                summary=str(reflection_summary.get("summary") or "Reflection added one grounded follow-up probe."),
+                status="succeeded",
+                source_layer="chat",
+                payload_preview={
+                    "reason": reflection_summary.get("reason"),
+                    "next_probe": reflection_summary.get("next_probe"),
+                    "confidence": reflection_summary.get("confidence"),
+                },
+                target_label=str(reflection_summary.get("next_probe") or ""),
+            )
+        )
+    else:
+        reflection_events.append(
+            build_annotation(
+                annotation_id="reflection-summary",
+                kind="reflection_follow_up",
+                title="Reflection pass",
+                summary=str(reflection_summary.get("summary") or "Reflection did not add a follow-up probe."),
+                status="ready",
+                source_layer="chat",
+                payload_preview={
+                    "reason": reflection_summary.get("reason"),
+                    "next_probe": reflection_summary.get("next_probe"),
+                    "confidence": reflection_summary.get("confidence"),
+                },
+            )
+        )
 
     recommended_next_actions = build_recommended_next_actions(
         scenario_tag,
@@ -1859,6 +2478,7 @@ async def collect_repo_copilot_trace(
         search_term=search_term,
         trace_steps=trace_steps,
         evidence=evidence,
+        grounding_context=grounding_context,
         failure_state=failure_state,
     )
 
@@ -1902,9 +2522,13 @@ async def collect_repo_copilot_trace(
                 },
             )
         )
-    timeline = [*planned_actions, *actual_events, *proposal_events, *next_action_events]
+    timeline = [*planned_actions, *reflection_planned_actions, *actual_events, *reflection_events, *proposal_events, *next_action_events]
 
     status = "failed" if any(step.get("status") == "failed" for step in trace_steps) else "succeeded"
+    primary_grounded_target = grounding_context.get("primary_grounded_target")
+    primary_grounded_target_value = str((primary_grounded_target or {}).get("value") or "").strip()
+    reflection_reason = str(reflection_summary.get("reason") or "") or None
+    reflection_next_probe = str(reflection_summary.get("next_probe") or "") or None
 
     return {
         "mode": resolved_mode,
@@ -1923,6 +2547,16 @@ async def collect_repo_copilot_trace(
             search_term=search_term,
             browser_url=browser_url,
         ),
+        "grounding_summary": {
+            "headline": grounding_context.get("headline") or "Grounding context",
+            "summary": grounding_context.get("summary") or "",
+            "signals": grounding_context.get("signals") or [],
+        },
+        "grounded_targets": grounding_context.get("grounded_targets") or [],
+        "primary_grounded_target": primary_grounded_target,
+        "reflection_summary": reflection_summary,
+        "reflection_reason": reflection_reason,
+        "reflection_next_probe": reflection_next_probe,
         "steps": trace_steps,
         "evidence": evidence,
         "evidence_items": evidence,
@@ -1934,7 +2568,7 @@ async def collect_repo_copilot_trace(
         "recommended_next_actions": recommended_next_actions,
         "runtime_execution_ids": runtime_execution_ids,
         "artifact_summaries": artifact_summaries,
-        "primary_failure_target": failure_state.get("primary_failure_target") if failure_state else None,
+        "primary_failure_target": (failure_state.get("primary_failure_target") if failure_state else None) or primary_grounded_target_value or None,
         "failure_summary": failure_state.get("failure_summary") if failure_state else None,
         "failure_classification": failure_state.get("failure_classification") if failure_state else None,
         "stderr_highlights": list(failure_state.get("stderr_highlights") or []) if failure_state else [],

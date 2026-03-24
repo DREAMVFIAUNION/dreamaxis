@@ -164,9 +164,13 @@ export function ChatExecutionBundle({
   const currentMode = trace.mode_summary?.active_mode ?? trace.mode;
   const bundleId = trace.execution_bundle_id ?? parentExecutionId ?? "--";
   const evidenceItems = trace.evidence_items ?? trace.evidence ?? [];
+  const groundingSummary = trace.grounding_summary;
+  const groundedTargets = trace.grounded_targets ?? [];
+  const primaryGroundedTarget = trace.primary_grounded_target;
+  const reflectionSummary = trace.reflection_summary;
   const failureSummary = trace.failure_summary?.trim();
   const failureType = trace.failure_classification?.trim() ?? "";
-  const primaryFailureTarget = trace.primary_failure_target?.trim();
+  const primaryFailureTarget = trace.primary_failure_target?.trim() ?? primaryGroundedTarget?.value?.trim();
   const stderrHighlights = (trace.stderr_highlights ?? []).filter(Boolean);
   const groundedReasoning = (trace.grounded_next_step_reasoning ?? []).filter(Boolean);
   const failureLabel = FAILURE_TYPE_LABELS[failureType] ?? (failureType ? failureType.replaceAll("_", " ") : "Unknown");
@@ -195,15 +199,36 @@ export function ChatExecutionBundle({
             ))}
           </ul>
         </SectionCard>
-        <SectionCard title="Recommended next step">
-          <ul className="space-y-2 text-sm leading-7 text-ink">
-            {(trace.recommended_next_actions ?? []).map((item) => (
-              <li key={item.label}>
-                - {item.label}
-                {item.reason ? <span className="text-mutedInk"> - {item.reason}</span> : null}
-              </li>
-            ))}
-          </ul>
+        <SectionCard title="Grounded target">
+          <div className="space-y-3">
+            {groundingSummary?.summary ? <p className="text-sm leading-7 text-ink">{groundingSummary.summary}</p> : null}
+            {primaryGroundedTarget ? (
+              <div className="border border-cyan-400/20 bg-cyan-500/5 px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="border border-cyan-400/20 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100">
+                    {primaryGroundedTarget.type.replaceAll("_", " ")}
+                  </span>
+                  {primaryGroundedTarget.status ? (
+                    <span className="border border-white/10 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                      {primaryGroundedTarget.status}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 break-all text-sm leading-7 text-ink">{primaryGroundedTarget.value}</p>
+                {primaryGroundedTarget.reason ? <p className="mt-2 text-xs leading-6 text-mutedInk">{primaryGroundedTarget.reason}</p> : null}
+              </div>
+            ) : null}
+            {groundedTargets.length > 1 ? (
+              <ul className="space-y-2 text-xs leading-6 text-mutedInk">
+                {groundedTargets.slice(0, 4).map((target, index) => (
+                  <li key={`${target.type}-${target.value}-${index}`}>
+                    - <span className="text-ink">{target.value}</span>
+                    <span className="text-mutedInk"> ({target.type.replaceAll("_", " ")})</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </SectionCard>
       </div>
 
@@ -218,7 +243,7 @@ export function ChatExecutionBundle({
                 ? step.command_preview
                 : step.command_preview
                   ? JSON.stringify(step.command_preview)
-                  : "--");
+                  : primaryGroundedTarget?.value ?? "--");
             const stepIsOpen = step.status !== "succeeded";
 
             return (
@@ -330,13 +355,43 @@ export function ChatExecutionBundle({
         </div>
       </SectionCard>
 
+      <SectionCard
+        title="Reflection"
+        aside={
+          <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(reflectionSummary?.triggered ? "degraded" : "ready")}`}>
+            {reflectionSummary?.triggered ? "follow-up probe" : "no follow-up"}
+          </span>
+        }
+      >
+        <div className="space-y-3">
+          {reflectionSummary?.summary ? <p className="text-sm leading-7 text-ink">{reflectionSummary.summary}</p> : <p className="text-sm leading-7 text-mutedInk">No reflection pass was needed for this turn.</p>}
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <StepMeta label="Triggered" value={reflectionSummary ? (reflectionSummary.triggered ? "yes" : "no") : "no"} />
+            <StepMeta label="Confidence" value={reflectionSummary?.confidence ?? null} />
+            <StepMeta label="Reason" value={trace.reflection_reason ?? reflectionSummary?.reason ?? null} />
+            <StepMeta label="Next probe" value={trace.reflection_next_probe ?? reflectionSummary?.next_probe ?? null} />
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Recommended next step">
+        <ul className="space-y-2 text-sm leading-7 text-ink">
+          {(trace.recommended_next_actions ?? []).map((item) => (
+            <li key={item.label}>
+              - {item.label}
+              {item.reason ? <span className="text-mutedInk"> - {item.reason}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+
       {trace.proposal ? (
         <SectionCard title="Proposal output" aside={<span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span>}>
           <p className="text-sm leading-7 text-ink">{trace.proposal.summary}</p>
-          {primaryFailureTarget ? (
+          {primaryFailureTarget || primaryGroundedTarget?.value ? (
             <div className="mt-3 border border-amber-300/20 bg-amber-500/5 px-3 py-3">
               <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Focus target</p>
-              <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget}</p>
+              <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget ?? primaryGroundedTarget?.value}</p>
             </div>
           ) : null}
           {trace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{trace.proposal.patch_summary}</p> : null}

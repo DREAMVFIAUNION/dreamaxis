@@ -155,6 +155,17 @@ class Runner:
         if not evidence_ok:
             notes.append("no evidence items returned")
 
+        grounding_summary = trace.get("grounding_summary") or {}
+        grounded_targets = trace.get("grounded_targets") or []
+        primary_grounded_target = trace.get("primary_grounded_target") or {}
+        grounding_ok = bool(
+            grounding_summary.get("summary")
+            and grounded_targets
+            and primary_grounded_target.get("value")
+        )
+        if not grounding_ok:
+            notes.append("trace missing grounding summary / grounded targets")
+
         proposal_ok = True
         if scenario.expect_proposal:
             proposal_ok = bool(proposal and proposal.get("not_applied") is True and proposal.get("targets"))
@@ -171,6 +182,8 @@ class Runner:
 
         troubleshooting_ok = True
         failure_target_ok = True
+        reflection_ok = True
+        reflection_summary = trace.get("reflection_summary") or {}
         if failed_steps:
             failure_summary = trace.get("failure_summary")
             failure_classification = trace.get("failure_classification")
@@ -194,6 +207,18 @@ class Runner:
                 notes.append("failed trace missing stderr_highlights")
             if not grounded_reasoning:
                 notes.append("failed trace missing grounded_next_step_reasoning")
+            reflection_ok = bool(
+                reflection_summary
+                and trace.get("reflection_summary")
+                and trace.get("reflection_reason")
+                and (not reflection_summary.get("triggered") or trace.get("reflection_next_probe"))
+            )
+            if not reflection_ok:
+                notes.append("failed trace missing reflection summary / follow-up metadata")
+        elif reflection_summary.get("triggered"):
+            reflection_ok = bool(trace.get("reflection_reason") and trace.get("reflection_next_probe"))
+            if not reflection_ok:
+                notes.append("triggered reflection missing reason / next probe")
 
         runtime_link_ok = True
         parent_payload: dict[str, Any] | None = None
@@ -223,7 +248,23 @@ class Runner:
         if not safety_ok:
             notes.append("safety summary did not confirm blocked writes / proposal-only mode")
 
-        overall_ok = all([mode_ok, sse_ok, sections_ok, trace_ok, evidence_ok, proposal_ok, browser_ok, troubleshooting_ok, failure_target_ok, runtime_link_ok, safety_ok])
+        overall_ok = all(
+            [
+                mode_ok,
+                sse_ok,
+                sections_ok,
+                trace_ok,
+                evidence_ok,
+                grounding_ok,
+                proposal_ok,
+                browser_ok,
+                troubleshooting_ok,
+                failure_target_ok,
+                reflection_ok,
+                runtime_link_ok,
+                safety_ok,
+            ]
+        )
         return {
             "repo": scenario.repo_label,
             "workspace_label": scenario.workspace_label,
@@ -238,16 +279,21 @@ class Runner:
             "sections_ok": sections_ok,
             "trace_ok": trace_ok,
             "evidence_ok": evidence_ok,
+            "grounding_ok": grounding_ok,
             "proposal_ok": proposal_ok,
             "browser_ok": browser_ok,
             "troubleshooting_ok": troubleshooting_ok,
             "failure_target_ok": failure_target_ok,
+            "reflection_ok": reflection_ok,
             "runtime_link_ok": runtime_link_ok,
             "safety_ok": safety_ok,
             "notes": notes,
             "parent_execution_id": parent_execution_id,
             "child_execution_ids": runtime_execution_ids,
             "trace_summary": trace.get("trace_summary"),
+            "grounding_summary": grounding_summary,
+            "primary_grounded_target": primary_grounded_target,
+            "reflection_summary": reflection_summary,
             "proposal": proposal,
             "parent_execution": parent_payload,
         }
@@ -270,15 +316,15 @@ class Runner:
             "",
             "## Scenario matrix",
             "",
-            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Failure target | Runtime linkage | Safety | Notes |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Grounding | Proposal | Browser | Troubleshooting | Failure target | Reflection | Runtime linkage | Safety | Notes |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for item in self.results:
             notes = "<br>".join(item["notes"]) if item["notes"] else "ok"
             lines.append(
                 f"| {item['repo']} | {item['scenario']} | `{item['mode']}` | {'PASS' if item['ok'] else 'FAIL'} | "
-                f"{'ok' if item['mode_ok'] else 'fail'} | {'ok' if item['trace_ok'] else 'fail'} | {'ok' if item['evidence_ok'] else 'fail'} | "
-                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['troubleshooting_ok'] else 'fail'} | {'ok' if item['failure_target_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
+                f"{'ok' if item['mode_ok'] else 'fail'} | {'ok' if item['trace_ok'] else 'fail'} | {'ok' if item['evidence_ok'] else 'fail'} | {'ok' if item['grounding_ok'] else 'fail'} | "
+                f"{'ok' if item['proposal_ok'] else 'fail'} | {'ok' if item['browser_ok'] else 'fail'} | {'ok' if item['troubleshooting_ok'] else 'fail'} | {'ok' if item['failure_target_ok'] else 'fail'} | {'ok' if item['reflection_ok'] else 'fail'} | {'ok' if item['runtime_link_ok'] else 'fail'} | {'ok' if item['safety_ok'] else 'fail'} | {notes} |"
             )
         lines.extend([
             "",
@@ -302,7 +348,7 @@ class Runner:
             for item in failed:
                 lines.append(f"- {item['repo']} / {item['scenario']}: {'; '.join(item['notes'])}")
         else:
-            lines.append("- v0.2 chat-first verify / troubleshoot flow is grounded, proposal-only for edits, and runtime-linked across the acceptance set.")
+            lines.append("- v0.2 grounded verify loop is passing with visible grounding targets, reflection-aware follow-up probes, proposal-only edits, and runtime-linked evidence across the acceptance set.")
         REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
         REPORT_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
         REPORT_JSON_PATH.write_text(json.dumps(self.results, indent=2, ensure_ascii=False), encoding="utf-8")

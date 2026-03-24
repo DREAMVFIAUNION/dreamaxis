@@ -65,6 +65,9 @@ def build_trace_response_metadata(trace: dict | None) -> dict:
     return {
         "mode": trace.get("mode"),
         "execution_bundle_id": trace.get("execution_bundle_id"),
+        "grounding_summary": trace.get("grounding_summary"),
+        "primary_grounded_target": trace.get("primary_grounded_target"),
+        "reflection_summary": trace.get("reflection_summary"),
         "evidence_items": trace.get("evidence_items") or trace.get("evidence") or [],
         "proposal": trace.get("proposal"),
         "workspace_readiness": trace.get("workspace_readiness"),

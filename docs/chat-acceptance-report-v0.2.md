@@ -12,21 +12,21 @@
 
 ## Scenario matrix
 
-| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Proposal | Browser | Troubleshooting | Failure target | Runtime linkage | Safety | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DreamAxis | understand-onboarding | `understand` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | inspect-provider-settings | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | verify-dashboard | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| DreamAxis | propose-fix-chat | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Paperclip | inspect-entrypoint | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Brain Core | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| Brain Core | propose-fix-startup | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Repo | Scenario | Mode | Result | Mode | Trace | Evidence | Grounding | Proposal | Browser | Troubleshooting | Failure target | Reflection | Runtime linkage | Safety | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DreamAxis | understand-onboarding | `understand` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | inspect-provider-settings | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | verify-dashboard | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| DreamAxis | propose-fix-chat | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Paperclip | inspect-entrypoint | `inspect` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Brain Core | verify-readiness | `verify` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| Brain Core | propose-fix-startup | `propose_fix` | PASS | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok | ok |
 
 ## Screenshot anchors
 
-- `verify-dashboard` conversation: `/chat/conversation-6b50ef10e8`
-- `propose-fix-chat` conversation: `/chat/conversation-d187d18f68`
+- `verify-dashboard` conversation: `/chat/conversation-3e58c87455`
+- `propose-fix-chat` conversation: `/chat/conversation-aef5b47018`
 
 ## Summary
 
@@ -35,4 +35,4 @@
 
 ## Next fixes
 
-- v0.2 chat-first verify / troubleshoot flow is grounded, proposal-only for edits, and runtime-linked across the acceptance set.
+- v0.2 grounded verify loop is passing with visible grounding targets, reflection-aware follow-up probes, proposal-only edits, and runtime-linked evidence across the acceptance set.
