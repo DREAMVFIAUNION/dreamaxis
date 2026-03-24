@@ -15,7 +15,7 @@
 <p align="center">
   <img alt="local-first" src="https://img.shields.io/badge/local--first-yes-0f172a">
   <img alt="auth-local-open" src="https://img.shields.io/badge/auth-local__open-default-38bdf8">
-  <img alt="runtime-cli-browser" src="https://img.shields.io/badge/runtime-CLI%20%2B%20Browser-67e8f9">
+  <img alt="runtime-cli-browser-desktop" src="https://img.shields.io/badge/runtime-CLI%20%2B%20Browser%20%2B%20Desktop-67e8f9">
   <img alt="skill-packs" src="https://img.shields.io/badge/skill%20packs-builtin%20%2B%20imported-94a3b8">
   <img alt="knowledge-packs" src="https://img.shields.io/badge/knowledge-packs%20%2B%20uploads-a78bfa">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-22c55e">
@@ -27,7 +27,7 @@ DreamAxis is built for operators and builders who want:
 
 - **no signup by default** with `AUTH_MODE=local_open`
 - **self-hosted provider keys** instead of a central account dependency
-- **CLI + Browser runtimes** for real execution, not chat alone
+- **CLI + Browser + Desktop runtimes** for real execution, not chat alone
 - **skill packs** that can be reused, imported, and expanded
 - **knowledge packs + uploads** that compound into durable project memory
 - a stronger local baseline aligned with modern desktop coding assistants:
@@ -39,7 +39,7 @@ DreamAxis is designed around four simple defaults:
 
 - **local-first** - run on your own machine and infrastructure first
 - **no-signup by default** - the main path starts with `AUTH_MODE=local_open`
-- **runtime-centric** - use CLI and browser execution, not just chat text
+- **runtime-centric** - use CLI, browser, and desktop execution instead of chat text alone
 - **self-hosted assets** - keep provider keys, skills, knowledge, and workspace data under your control
 
 ## Verified acceptance status
@@ -49,6 +49,7 @@ Latest local acceptance baseline:
 - **v0.2 chat-first repo copilot:** `8/8` scenarios passed
 - **NVIDIA Build provider validation:** `9/9` scenarios passed
 - **grounded verify / troubleshoot loop:** grounded targets, reflection-aware follow-up, failure summaries, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
+- **Windows host desktop runtime:** inspect, verify, and approval-gated operate flows validated with real `focus_window`, `launch_app`, `press_hotkey`, `type_text`, and `click` actions
 - validated across:
   - DreamAxis
   - a Node.js repo
@@ -64,6 +65,7 @@ See:
 - [docs/chat-acceptance-report-v0.2.md](./docs/chat-acceptance-report-v0.2.md)
 - [docs/chat-acceptance-report-nvidia.md](./docs/chat-acceptance-report-nvidia.md)
 - [docs/repo-copilot-runbook.md](./docs/repo-copilot-runbook.md)
+- [docs/desktop-host-validation-2026-03-24.md](./docs/desktop-host-validation-2026-03-24.md)
 
 ## Screenshots
 
@@ -78,12 +80,12 @@ See:
 | Skills | Runtime |
 |---|---|
 | ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
-| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, execution bundles, child executions, and audit-ready trails back to chat turns. |
+| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, CLI/browser/desktop execution bundles, child executions, and audit-ready trails back to chat turns. |
 
 | Knowledge | Chat |
 |---|---|
 | ![DreamAxis Knowledge](docs/assets/readme/dreamaxis-knowledge.png) | ![DreamAxis Chat](docs/assets/readme/dreamaxis-chat.png) |
-| Builtin packs, uploaded documents, and retrieval-ready assets. | Grounded verify / troubleshoot operator console with visible targets, reflection-aware follow-up, runtime evidence, and proposal-only repair guidance. |
+| Builtin packs, uploaded documents, and retrieval-ready assets. | Desktop-first grounded control console with visible targets, approval gates, approved desktop actions, runtime evidence, and proposal-only repo repair guidance. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 
@@ -101,10 +103,12 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 - sync available models or enter a model manually
 - keep provider secrets self-hosted in your own deployment
 
-### Execute via CLI + Browser
+### Execute via CLI + Browser + Desktop
 
 - run CLI skills against your local workspace
 - run Playwright-backed browser skills and capture artifacts
+- inspect the Windows desktop surface through the host desktop runtime
+- execute approval-gated desktop actions with runtime-backed audit trails
 - review runtime hosts, sessions, executions, and outputs in one place
 - use chat-first verify / troubleshoot flows with grounded targets, reflection-aware follow-up, and runtime-backed failure summaries instead of black-box answers
 
@@ -124,8 +128,9 @@ DreamAxis already includes:
 
 - **CLI Runtime v1**
 - **Browser Runtime v1 (Playwright)**
+- **Desktop Runtime v1 (Windows host worker)**
 - runtime/session/execution visibility in the web console
-- chat-first troubleshooting summaries backed by runtime evidence, not prose-only diagnosis
+- chat-first troubleshooting summaries and approval-gated desktop actions backed by runtime evidence, not prose-only diagnosis
 
 ### Reusable system assets
 
@@ -231,6 +236,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/development.md](./docs/development.md)
 - [docs/deployment-modes.md](./docs/deployment-modes.md)
 - [docs/browser-runtime.md](./docs/browser-runtime.md)
+- [docs/desktop-runtime-v1.md](./docs/desktop-runtime-v1.md)
 - [docs/skill-packs.md](./docs/skill-packs.md)
 - [docs/knowledge-packs.md](./docs/knowledge-packs.md)
 - [docs/backend-api.md](./docs/backend-api.md)

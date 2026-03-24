@@ -71,6 +71,9 @@ Try to keep screenshots:
 
 Latest refresh notes:
 
+- `2026-03-25`: `artifacts/acceptance/dreamaxis-chat.png` refreshed to the desktop-first operator-console view with visible grounded target selection, approval state, runtime linkage, and approved desktop action evidence
+- `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed from the latest desktop host validation run and now anchors the public chat surface on grounded desktop control instead of repo-only troubleshooting
+- `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-runtime.png` retained because the current runtime control-plane capture remains the clearest public audit screenshot
 - `2026-03-24`: `artifacts/acceptance/dreamaxis-chat.png` refreshed as the v0.2 acceptance composite (verify / troubleshoot failure summary + propose-fix proposal-only lane)
 - `2026-03-24`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed to the grounded verify / troubleshoot operator-console view with visible target selection, reflection, failure summary, and runtime linkage from the latest `8/8 PASS` acceptance run
 - `2026-03-24`: README canonical `docs/assets/readme/dreamaxis-runtime.png` refreshed from the latest runtime control-plane capture showing bundle / child execution linkage for grounded chat turns
