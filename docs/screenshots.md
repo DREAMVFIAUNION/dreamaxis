@@ -71,6 +71,7 @@ Try to keep screenshots:
 
 Latest refresh notes:
 
-- `2026-03-24`: `dreamaxis-chat.png` refreshed from the troubleshooting summarizer acceptance pass with failure summary + execution cards
-- `2026-03-23`: `dreamaxis-chat.png` refreshed from the v0.2 verify lane acceptance pass
-- `2026-03-23`: `dreamaxis-runtime.png` refreshed from the v0.2 runtime control plane after bundle-aware acceptance
+- `2026-03-24`: `artifacts/acceptance/dreamaxis-chat.png` refreshed as the v0.2 acceptance composite (verify / troubleshoot failure summary + propose-fix proposal-only lane)
+- `2026-03-24`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed to the bundle-first verify / troubleshoot card view from the latest `8/8 PASS` acceptance run
+- `2026-03-24`: README canonical `docs/assets/readme/dreamaxis-runtime.png` refreshed from the latest runtime control plane acceptance capture
+- `2026-03-24`: `artifacts/acceptance/dreamaxis-runtime.png` retained as the preferred runtime acceptance capture after the v0.2 UI polish pass

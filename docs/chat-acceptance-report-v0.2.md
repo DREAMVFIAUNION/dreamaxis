@@ -25,8 +25,8 @@
 
 ## Screenshot anchors
 
-- `verify-dashboard` conversation: `/chat/conversation-270ac15e62`
-- `propose-fix-chat` conversation: `/chat/conversation-74ae68705c`
+- `verify-dashboard` conversation: `/chat/conversation-6b50ef10e8`
+- `propose-fix-chat` conversation: `/chat/conversation-d187d18f68`
 
 ## Summary
 

@@ -16,6 +16,8 @@ export function StreamMessage({
   sources?: KnowledgeChunkReference[] | null;
   details?: React.ReactNode;
 }) {
+  const hasStructuredBundle = role === "assistant" && Boolean(details);
+
   return (
     <article
       className={cn(
@@ -27,8 +29,20 @@ export function StreamMessage({
         <span className="text-[10px] uppercase tracking-[0.3em] text-signal">{role}</span>
         {pending ? <span className="text-[10px] uppercase tracking-[0.3em] text-mutedInk">streaming</span> : null}
       </div>
-      <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
-      {details ? <div className="border-t border-white/5 pt-3">{details}</div> : null}
+
+      {hasStructuredBundle ? <div className="border-t border-white/5 pt-3">{details}</div> : null}
+
+      {hasStructuredBundle ? (
+        <details className="border border-white/5 bg-black/20 px-4 py-3">
+          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.22em] text-mutedInk">
+            Model synthesis / raw assistant response
+          </summary>
+          <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
+        </details>
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
+      )}
+
       {sources?.length ? (
         <div className="border-t border-white/5 pt-3">
           <p className="text-[10px] uppercase tracking-[0.24em] text-mutedInk">Knowledge sources</p>

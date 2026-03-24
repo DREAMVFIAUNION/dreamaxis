@@ -78,12 +78,12 @@ See:
 | Skills | Runtime |
 |---|---|
 | ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
-| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, sessions, executions, and artifacts. |
+| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, sessions, executions, and audit-ready runtime trails. |
 
 | Knowledge | Chat |
 |---|---|
 | ![DreamAxis Knowledge](docs/assets/readme/dreamaxis-knowledge.png) | ![DreamAxis Chat](docs/assets/readme/dreamaxis-chat.png) |
-| Builtin packs, uploaded documents, and retrieval-ready assets. | Streaming conversations backed by providers, runtime history, and knowledge context. |
+| Builtin packs, uploaded documents, and retrieval-ready assets. | Chat-first verify / troubleshoot with failure summaries, runtime evidence, and proposal-only repair guidance. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 

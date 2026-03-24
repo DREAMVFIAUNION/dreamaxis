@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { ChatExecutionTrace, ChatEvidenceItem, RuntimeExecution } from "@dreamaxis/client";
 
 const FAILURE_TYPE_LABELS: Record<string, string> = {
@@ -39,6 +40,35 @@ function toArtifacts(value: unknown) {
   return Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
 }
 
+function shorten(value: string | null | undefined, limit = 140) {
+  if (!value) return "--";
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 3)}...`;
+}
+
+function StepMeta({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="border border-white/5 bg-black/20 px-2.5 py-2">
+      <p className="text-[9px] uppercase tracking-[0.18em] text-mutedInk">{label}</p>
+      <p className="mt-1 break-all text-[11px] leading-5 text-ink">{String(value)}</p>
+    </div>
+  );
+}
+
+function SectionCard({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="border border-white/5 bg-black/25 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-signal">{title}</p>
+        {aside}
+      </div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
 function renderArtifact(artifact: Record<string, unknown>, index: number) {
   const dataUrl = typeof artifact.data_url === "string" ? artifact.data_url : null;
   const kind = typeof artifact.kind === "string" ? artifact.kind : "artifact";
@@ -65,35 +95,60 @@ function renderEvidence(evidence: ChatEvidenceItem, runtimeIndex: Map<string, Ru
   const runtimeArtifacts = evidence.runtime_execution_id ? toArtifacts(runtimeIndex.get(evidence.runtime_execution_id)?.artifacts_json) : [];
   const inlineArtifacts = toArtifacts(evidence.artifact_summaries);
   const artifacts = inlineArtifacts.length ? inlineArtifacts : runtimeArtifacts;
+  const preview = shorten(evidence.content, 120);
+  const hasExpandableBody = Boolean(
+    evidence.stderr_excerpt ||
+      artifacts.length ||
+      evidence.path ||
+      evidence.current_url ||
+      evidence.label ||
+      typeof evidence.exit_code === "number",
+  );
 
   return (
-    <div key={`${evidence.title}-${evidence.runtime_execution_id ?? evidence.content}`} className="border border-white/5 bg-black/30 px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-semibold text-ink">{evidence.title}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-signal">{evidence.type}</p>
+    <details key={`${evidence.title}-${evidence.runtime_execution_id ?? evidence.content}`} className="group border border-white/5 bg-black/30 px-3 py-3" open={!hasExpandableBody}>
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-ink">{evidence.title}</p>
+              <span className="border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100">{evidence.type}</span>
+            </div>
+            <p className="mt-2 text-xs leading-6 text-mutedInk">{preview}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {evidence.runtime_execution_id ? (
+              <Link
+                href={`/runtime?execution=${evidence.runtime_execution_id}`}
+                className="border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100"
+              >
+                Open runtime
+              </Link>
+            ) : null}
+            {hasExpandableBody ? <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk transition group-open:text-ink">Details</span> : null}
+          </div>
         </div>
-        {evidence.runtime_execution_id ? (
-          <Link href={`/runtime?execution=${evidence.runtime_execution_id}`} className="text-[10px] uppercase tracking-[0.18em] text-signal">
-            Open runtime
-          </Link>
-        ) : null}
-      </div>
-      <p className="mt-2 text-xs leading-6 text-mutedInk">{evidence.content}</p>
-      <div className="mt-3 grid gap-2 text-[11px] text-mutedInk md:grid-cols-2">
-        {evidence.path ? <p>path: {evidence.path}</p> : null}
-        {evidence.current_url ? <p>url: {evidence.current_url}</p> : null}
-        {typeof evidence.exit_code === "number" ? <p>exit: {evidence.exit_code}</p> : null}
-        {evidence.label ? <p>label: {evidence.label}</p> : null}
-      </div>
-      {evidence.stderr_excerpt ? (
-        <details className="mt-3 border border-red-400/20 bg-red-500/5 px-3 py-2">
-          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-red-200">stderr excerpt</summary>
-          <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{evidence.stderr_excerpt}</pre>
-        </details>
+      </summary>
+
+      {hasExpandableBody ? (
+        <div className="mt-3 border-t border-white/5 pt-3">
+          <p className="text-xs leading-6 text-ink">{evidence.content}</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <StepMeta label="Path" value={evidence.path} />
+            <StepMeta label="URL" value={evidence.current_url} />
+            <StepMeta label="Exit" value={typeof evidence.exit_code === "number" ? evidence.exit_code : null} />
+            <StepMeta label="Label" value={evidence.label} />
+          </div>
+          {evidence.stderr_excerpt ? (
+            <details className="mt-3 border border-red-400/20 bg-red-500/5 px-3 py-2" open>
+              <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-red-200">stderr excerpt</summary>
+              <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-red-200">{evidence.stderr_excerpt}</pre>
+            </details>
+          ) : null}
+          {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
+        </div>
       ) : null}
-      {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
-    </div>
+    </details>
   );
 }
 
@@ -120,27 +175,28 @@ export function ChatExecutionBundle({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(currentMode)}`}>Mode / {modeLabel(currentMode)}</span>
-        <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(trace.trace_summary?.status)}`}>Bundle / {bundleId}</span>
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(readiness(trace))}`}>Readiness / {readiness(trace)}</span>
+        <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(trace.trace_summary?.status)}`}>Bundle / {bundleId}</span>
         {parentExecutionId ? (
-          <Link href={`/runtime?execution=${parentExecutionId}`} className="border border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-signal">
-            Parent runtime
+          <Link
+            href={`/runtime?execution=${parentExecutionId}`}
+            className="border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100"
+          >
+            Audit parent runtime
           </Link>
         ) : null}
       </div>
 
       <div className="grid gap-3 xl:grid-cols-2">
-        <div className="border border-white/5 bg-black/25 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Intent / plan</p>
-          <ul className="mt-3 space-y-2 text-sm leading-7 text-ink">
+        <SectionCard title="Intent / plan">
+          <ul className="space-y-2 text-sm leading-7 text-ink">
             {trace.intent_plan.map((item) => (
               <li key={item}>- {item}</li>
             ))}
           </ul>
-        </div>
-        <div className="border border-white/5 bg-black/25 px-3 py-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Recommended next step</p>
-          <ul className="mt-3 space-y-2 text-sm leading-7 text-ink">
+        </SectionCard>
+        <SectionCard title="Recommended next step">
+          <ul className="space-y-2 text-sm leading-7 text-ink">
             {(trace.recommended_next_actions ?? []).map((item) => (
               <li key={item.label}>
                 - {item.label}
@@ -148,82 +204,116 @@ export function ChatExecutionBundle({
               </li>
             ))}
           </ul>
-        </div>
+        </SectionCard>
       </div>
 
-      <div className="border border-white/5 bg-black/25 px-3 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-signal">What ran</p>
-          <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{(trace.steps ?? []).length} child executions</span>
-        </div>
-        <div className="mt-3 space-y-3">
+      <SectionCard title="What ran" aside={<span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{(trace.steps ?? []).length} child executions</span>}>
+        <div className="space-y-3">
           {(trace.steps ?? []).filter((step) => step.runtime_execution_id).map((step) => {
             const runtime = step.runtime_execution_id ? runtimeIndex.get(step.runtime_execution_id) : null;
             const artifacts = toArtifacts(step.artifact_summaries).length ? toArtifacts(step.artifact_summaries) : toArtifacts(runtime?.artifacts_json);
+            const stepTarget =
+              step.current_url ??
+              (typeof step.command_preview === "string"
+                ? step.command_preview
+                : step.command_preview
+                  ? JSON.stringify(step.command_preview)
+                  : "--");
+            const stepIsOpen = step.status !== "succeeded";
+
             return (
-              <div key={step.runtime_execution_id} className="border border-white/5 bg-black/30 px-3 py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-ink">{step.title}</p>
-                      <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone(step.status)}`}>{step.status}</span>
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{step.kind}</span>
+              <details key={step.runtime_execution_id} className="group border border-white/5 bg-black/30 px-3 py-3" open={stepIsOpen}>
+                <summary className="cursor-pointer list-none">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink">{step.title}</p>
+                        <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone(step.status)}`}>{step.status}</span>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{step.kind}</span>
+                        {typeof step.exit_code === "number" ? (
+                          <span className="border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-mutedInk">exit {step.exit_code}</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-xs leading-6 text-mutedInk">{shorten(step.summary, 140)}</p>
+                      <p className="mt-2 text-[11px] leading-5 text-ink/80">Target: {shorten(stepTarget, 150)}</p>
                     </div>
-                    <p className="mt-2 text-xs leading-6 text-mutedInk">{step.summary}</p>
+                    <div className="flex items-center gap-2">
+                      {step.runtime_execution_id ? (
+                        <Link
+                          href={`/runtime?execution=${step.runtime_execution_id}`}
+                          className="border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100"
+                        >
+                          Open runtime
+                        </Link>
+                      ) : null}
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk transition group-open:text-ink">{stepIsOpen ? "Expanded" : "Expand"}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    {step.runtime_execution_id ? (
-                      <Link href={`/runtime?execution=${step.runtime_execution_id}`} className="text-[10px] uppercase tracking-[0.18em] text-signal">
-                        Open runtime
-                      </Link>
-                    ) : null}
+                </summary>
+
+                <div className="mt-3 border-t border-white/5 pt-3">
+                  <p className="text-xs leading-6 text-mutedInk">{step.summary}</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                    <StepMeta label="Target" value={stepTarget} />
+                    <StepMeta label="Session" value={step.runtime_session_id ?? "--"} />
+                    <StepMeta label="Artifacts" value={artifacts.length} />
+                    <StepMeta label="Runtime" value={step.runtime_execution_id ?? "--"} />
                   </div>
+                  {step.output_excerpt ? (
+                    <details className="mt-3 border border-white/5 bg-black/20 px-3 py-2" open={step.status !== "succeeded"}>
+                      <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">output excerpt</summary>
+                      <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-ink">{step.output_excerpt}</pre>
+                    </details>
+                  ) : null}
+                  {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
                 </div>
-                <div className="mt-3 grid gap-2 text-[11px] text-mutedInk md:grid-cols-2">
-                  <p>target: {step.current_url ?? (typeof step.command_preview === "string" ? step.command_preview : step.command_preview ? JSON.stringify(step.command_preview) : "--")}</p>
-                  <p>exit: {step.exit_code ?? "--"}</p>
-                  <p>session: {step.runtime_session_id ?? "--"}</p>
-                  <p>artifacts: {artifacts.length}</p>
-                </div>
-                {step.output_excerpt ? (
-                  <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-ink">{step.output_excerpt}</pre>
-                ) : null}
-                {artifacts.length ? <div className="mt-3 grid gap-3 md:grid-cols-2">{artifacts.map((artifact, index) => renderArtifact(artifact, index))}</div> : null}
-              </div>
+              </details>
             );
           })}
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="border border-white/5 bg-black/25 px-3 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-signal">What was found</p>
-          <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{evidenceItems.length} evidence items</span>
-        </div>
-        <div className="mt-3 space-y-3">
+      <SectionCard title="What was found" aside={<span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{evidenceItems.length} evidence items</span>}>
+        <div className="space-y-3">
           {failureSummary ? (
-            <div className="border border-red-400/25 bg-red-500/10 px-3 py-3">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="border border-red-400/25 bg-red-500/10 px-4 py-4 shadow-[0_0_0_1px_rgba(248,113,113,0.08)]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Failure summary</p>
-                <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone("failed")}`}>{failureLabel}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {parentExecutionId ? (
+                    <Link
+                      href={`/runtime?execution=${parentExecutionId}`}
+                      className="border border-red-300/20 bg-black/20 px-2.5 py-2 text-[10px] uppercase tracking-[0.18em] text-red-100"
+                    >
+                      Audit parent runtime
+                    </Link>
+                  ) : null}
+                  <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${tone("failed")}`}>{failureLabel}</span>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="border border-red-300/20 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-red-100">Why it failed</span>
+                {primaryFailureTarget ? <span className="border border-white/10 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-ink">Focus target ready</span> : null}
               </div>
               <p className="mt-3 text-sm leading-7 text-ink">{failureSummary}</p>
-              {primaryFailureTarget ? (
-                <div className="mt-4 border border-white/10 bg-black/20 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Fix this first</p>
-                  <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget}</p>
-                </div>
-              ) : null}
-              {groundedReasoning.length ? (
-                <div className="mt-4">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Why this likely failed</p>
-                  <ul className="mt-2 space-y-2 text-xs leading-6 text-ink">
-                    {groundedReasoning.map((item) => (
-                      <li key={item}>- {item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                {primaryFailureTarget ? (
+                  <div className="border border-white/10 bg-black/20 px-3 py-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Fix this first</p>
+                    <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget}</p>
+                  </div>
+                ) : null}
+                {groundedReasoning.length ? (
+                  <div className="border border-white/10 bg-black/20 px-3 py-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-red-100">Why this likely failed</p>
+                    <ul className="mt-2 space-y-2 text-xs leading-6 text-ink">
+                      {groundedReasoning.map((item) => (
+                        <li key={item}>- {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
               {stderrHighlights.length ? (
                 <details className="mt-4 border border-red-400/20 bg-black/20 px-3 py-2">
                   <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-red-100">stderr highlights</summary>
@@ -238,24 +328,22 @@ export function ChatExecutionBundle({
           ) : null}
           {evidenceItems.map((item) => renderEvidence(item, runtimeIndex))}
         </div>
-      </div>
+      </SectionCard>
 
       {trace.proposal ? (
-        <div className="border border-white/5 bg-black/25 px-3 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Proposal output</p>
-            <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span>
-          </div>
-          <p className="mt-3 text-sm leading-7 text-ink">{trace.proposal.summary}</p>
+        <SectionCard title="Proposal output" aside={<span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span>}>
+          <p className="text-sm leading-7 text-ink">{trace.proposal.summary}</p>
           {primaryFailureTarget ? (
-            <p className="mt-3 text-xs leading-6 text-mutedInk">
-              Focus target: <span className="text-ink">{primaryFailureTarget}</span>
-            </p>
+            <div className="mt-3 border border-amber-300/20 bg-amber-500/5 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Focus target</p>
+              <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget}</p>
+            </div>
           ) : null}
+          {trace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{trace.proposal.patch_summary}</p> : null}
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files</p>
-              <ul className="mt-2 space-y-2 text-xs leading-6 text-ink">
+            <details className="border border-white/5 bg-black/20 px-3 py-3" open>
+              <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files ({trace.proposal.targets.length})</summary>
+              <ul className="mt-3 space-y-2 text-xs leading-6 text-ink">
                 {trace.proposal.targets.map((target) => (
                   <li key={`${target.file_path}-${target.reason}`}>
                     - {target.file_path}
@@ -263,18 +351,17 @@ export function ChatExecutionBundle({
                   </li>
                 ))}
               </ul>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Suggested commands</p>
-              <ul className="mt-2 space-y-2 text-xs leading-6 text-ink">
+            </details>
+            <details className="border border-white/5 bg-black/20 px-3 py-3">
+              <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">Suggested commands ({trace.proposal.suggested_commands.length})</summary>
+              <ul className="mt-3 space-y-2 text-xs leading-6 text-ink">
                 {trace.proposal.suggested_commands.map((command) => (
                   <li key={command}>- {command}</li>
                 ))}
               </ul>
-            </div>
+            </details>
           </div>
-          {trace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{trace.proposal.patch_summary}</p> : null}
-        </div>
+        </SectionCard>
       ) : null}
     </div>
   );
