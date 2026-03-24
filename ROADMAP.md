@@ -46,21 +46,27 @@ Detailed plan:
 
 - `docs/v0.2-next-round-plan.md`
 
-## v0.3.x execution platform maturity
+## v0.3.x desktop operator alpha (Windows-first)
 
 Focus:
 
-- stronger execution safety
-- more reusable knowledge and pack tooling
-- deeper workspace-scoped workflows
+- move from repo-copilot-only positioning toward a **local-first desktop operator**
+- keep `/chat` as the primary entrypoint with **gated actions**
+- make **Windows app control first** the initial desktop lane
+- preserve runtime-backed audit trails instead of black-box autonomy
+- keep repo copilot as a high-value professional lane inside the wider product
 
 Candidate work:
 
-- git repo knowledge ingestion
-- web capture knowledge ingestion
-- stronger policy controls for runtime execution
-- pack import/version management improvements
-- richer execution audit trails
+- desktop grounding v1: windows, processes, focus state, screenshot / OCR, desktop targets
+- desktop runtime host v1 for Windows: list windows, focus allowed apps, capture screen, OCR, click, type, hotkeys
+- approval contract for state-changing desktop actions
+- desktop execution lineage in `/runtime`
+- Windows operator scenarios for inspect / verify / operate flows
+
+Detailed plan:
+
+- `docs/v0.3-desktop-operator-plan.md`
 
 ## v0.4.x agent-role enablement
 

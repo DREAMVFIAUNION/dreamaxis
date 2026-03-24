@@ -48,7 +48,7 @@ Latest local acceptance baseline:
 
 - **v0.2 chat-first repo copilot:** `8/8` scenarios passed
 - **NVIDIA Build provider validation:** `9/9` scenarios passed
-- **troubleshooting summarizer:** failure summary, failure classification, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
+- **grounded verify / troubleshoot loop:** grounded targets, reflection-aware follow-up, failure summaries, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
 - validated across:
   - DreamAxis
   - a Node.js repo
@@ -78,12 +78,12 @@ See:
 | Skills | Runtime |
 |---|---|
 | ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
-| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, sessions, executions, and audit-ready runtime trails. |
+| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, execution bundles, child executions, and audit-ready trails back to chat turns. |
 
 | Knowledge | Chat |
 |---|---|
 | ![DreamAxis Knowledge](docs/assets/readme/dreamaxis-knowledge.png) | ![DreamAxis Chat](docs/assets/readme/dreamaxis-chat.png) |
-| Builtin packs, uploaded documents, and retrieval-ready assets. | Chat-first verify / troubleshoot with failure summaries, runtime evidence, and proposal-only repair guidance. |
+| Builtin packs, uploaded documents, and retrieval-ready assets. | Grounded verify / troubleshoot operator console with visible targets, reflection-aware follow-up, runtime evidence, and proposal-only repair guidance. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 
@@ -106,7 +106,7 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 - run CLI skills against your local workspace
 - run Playwright-backed browser skills and capture artifacts
 - review runtime hosts, sessions, executions, and outputs in one place
-- use chat-first verify / troubleshoot flows with runtime-backed failure summaries instead of black-box answers
+- use chat-first verify / troubleshoot flows with grounded targets, reflection-aware follow-up, and runtime-backed failure summaries instead of black-box answers
 
 ## What makes it different
 
@@ -237,6 +237,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/skill-requirements.md](./docs/skill-requirements.md)
 - [docs/launch/README.md](./docs/launch/README.md)
 - [docs/launch/csdn-build-log-tutorial.md](./docs/launch/csdn-build-log-tutorial.md)
+- [docs/v0.3-desktop-operator-plan.md](./docs/v0.3-desktop-operator-plan.md)
 - [ROADMAP.md](./ROADMAP.md)
 - [CHANGELOG.md](./CHANGELOG.md)
 
