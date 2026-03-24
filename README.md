@@ -48,6 +48,7 @@ Latest local acceptance baseline:
 
 - **v0.2 chat-first repo copilot:** `8/8` scenarios passed
 - **NVIDIA Build provider validation:** `9/9` scenarios passed
+- **troubleshooting summarizer:** failure summary, failure classification, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
 - validated across:
   - DreamAxis
   - a Node.js repo
@@ -105,6 +106,7 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 - run CLI skills against your local workspace
 - run Playwright-backed browser skills and capture artifacts
 - review runtime hosts, sessions, executions, and outputs in one place
+- use chat-first verify / troubleshoot flows with runtime-backed failure summaries instead of black-box answers
 
 ## What makes it different
 
@@ -123,6 +125,7 @@ DreamAxis already includes:
 - **CLI Runtime v1**
 - **Browser Runtime v1 (Playwright)**
 - runtime/session/execution visibility in the web console
+- chat-first troubleshooting summaries backed by runtime evidence, not prose-only diagnosis
 
 ### Reusable system assets
 
@@ -233,6 +236,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/backend-api.md](./docs/backend-api.md)
 - [docs/skill-requirements.md](./docs/skill-requirements.md)
 - [docs/launch/README.md](./docs/launch/README.md)
+- [docs/launch/csdn-build-log-tutorial.md](./docs/launch/csdn-build-log-tutorial.md)
 - [ROADMAP.md](./ROADMAP.md)
 - [CHANGELOG.md](./CHANGELOG.md)
 

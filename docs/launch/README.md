@@ -10,6 +10,8 @@ This folder contains the English-first public launch copy for DreamAxis.
 - `community-launch-post.md` - longer post for forums, Discord, Reddit, or Hacker News-style sharing
 - `intro-blurb.md` - short reusable project blurb for profiles, directories, and forms
 - `seeded-issues.md` - first public issue seeds aligned with `v0.1.x polish`
+- `csdn-build-log-tutorial.md` - Chinese build-log/tutorial draft for CSDN-style publication
+- `csdn-publish-checklist.md` - pre-publish checklist for Chinese article rollout and screenshot review
 
 ## Positioning rules
 
@@ -21,3 +23,15 @@ All launch copy should keep the same framing:
 - the product already supports **CLI Runtime + Browser Runtime**
 - the system includes **skill packs + knowledge packs**
 - the current release is a foundation, not a finished multi-agent operating system
+
+## Chinese publication note
+
+For Chinese developer outreach, prefer:
+
+- a technical-but-promotional tone
+- concrete local-first / no-signup / self-hosted positioning
+- screenshots that show chat evidence, runtime visibility, and troubleshooting summaries
+- explicit current boundaries:
+  - proposal-only edits
+  - no automatic high-risk writes
+  - not yet a full autonomous multi-agent OS
