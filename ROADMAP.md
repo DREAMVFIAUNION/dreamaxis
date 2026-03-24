@@ -6,6 +6,7 @@ This roadmap reflects the current open-source direction:
 - **no-signup by default**
 - **self-hosted**
 - **runtime + skill + knowledge platform**
+- **desktop-first operator direction**
 
 ## Current baseline: v0.1.x foundation
 
@@ -21,51 +22,50 @@ Already in place:
 - runtime/session/execution visibility
 - GitHub-ready community scaffolding
 
-## Next major track: v0.2.x repo copilot usefulness
+## Current expansion baseline: v0.2.x repo copilot + desktop foundations
+
+Already validated on top of the v0.1 foundation:
+
+- chat-first repo copilot flows for understand / inspect / verify / propose-fix
+- grounded verify / troubleshoot summaries with evidence-first chat output
+- Browser Runtime artifacts wired into chat and runtime
+- Windows host Desktop Runtime v1
+- approval-gated desktop actions:
+  - `focus_window`
+  - `launch_app`
+  - `press_hotkey`
+  - `type_text`
+  - `click`
+- README and canonical screenshots updated to the desktop-first operator narrative
+
+Reference docs:
+
+- `docs/chat-acceptance-report-v0.2.md`
+- `docs/desktop-host-validation-2026-03-24.md`
+- `docs/desktop-runtime-v1.md`
+
+## Next major track: v0.3.x desktop operator alpha
 
 Focus:
 
-- chat as a true repo copilot entrypoint
-- safe chat-to-runtime orchestration
-- scenario-based validation against real repositories
-- clearer execution evidence in chat and runtime
-- stronger browser actions and artifacts
-- repo-aware verification and troubleshooting depth
-
-Candidate work:
-
-- repo onboarding / readiness / trace / verification / troubleshooting runbooks
-- better retry and fallback behavior in chat
-- repo and docs skill pack expansion
-- browser extract and selector ergonomics
-- improved runtime artifact previews
-- package-manager-aware verify routing
-- stronger failure summarization and proposal-only repair plans
-
-Detailed plan:
-
-- `docs/v0.2-next-round-plan.md`
-
-## v0.3.x desktop operator alpha (Windows-first)
-
-Focus:
-
-- move from repo-copilot-only positioning toward a **local-first desktop operator**
+- make DreamAxis a **desktop-first local operator**
 - keep `/chat` as the primary entrypoint with **gated actions**
-- make **Windows app control first** the initial desktop lane
-- preserve runtime-backed audit trails instead of black-box autonomy
-- keep repo copilot as a high-value professional lane inside the wider product
+- keep repo copilot as a specialized professional lane
+- deepen approval-backed Windows control and runtime audit
+- add motion/compression so live execution reads like an operator console, not a raw log wall
 
 Candidate work:
 
 - desktop grounding v1: windows, processes, focus state, screenshot / OCR, desktop targets
-- desktop runtime host v1 for Windows: list windows, focus allowed apps, capture screen, OCR, click, type, hotkeys
-- approval contract for state-changing desktop actions
-- desktop execution lineage in `/runtime`
-- Windows operator scenarios for inspect / verify / operate flows
+- approval contract hardening for state-changing actions
+- runtime detail polish for desktop execution lineage and artifacts
+- motion UI: execution strip, compressed cards, approval prominence, active-step pinning
+- browser + terminal + VS Code as the first coherent desktop app surface
+- repo/desktop dual-lane chat routing
 
 Detailed plan:
 
+- `docs/vnext-desktop-operator-first-plan.md`
 - `docs/v0.3-desktop-operator-plan.md`
 
 ## v0.4.x agent-role enablement
