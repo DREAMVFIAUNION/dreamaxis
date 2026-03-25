@@ -136,6 +136,17 @@ Alpha.2 is intentionally **not**:
 
 - `README.md`
 - `docs/acceptance-report-alpha2.md`
+- `docs/acceptance/rich-text-v1/acceptance-report.md`
 - `docs/desktop-runtime-v1.md`
 - `docs/backend-api.md`
 - `CHANGELOG.md`
+
+## Post-release UI evidence follow-up
+
+After the alpha.2 release evidence was finalized, the web surface also gained a tracked rich-text acceptance pack that now serves as the canonical proof for final-message Markdown rendering, KaTeX, Mermaid fallback, and operator/runtime explanatory text formatting.
+
+Use these assets when refreshing public docs or validating that README screenshots still match the current UI:
+
+- route: `/acceptance/rich-text-v1`
+- report: `docs/acceptance/rich-text-v1/acceptance-report.md`
+- screenshots: `docs/acceptance/rich-text-v1/screenshots/`

@@ -207,6 +207,45 @@ Reference docs:
 - `docs/repo-copilot-runbook.md`
 - `docs/notebooklm-evaluation.md`
 
+## Rich text acceptance harness
+
+Use the tracked fixture-driven harness when you need to re-check Markdown, code, math, Mermaid, or operator/runtime explanatory rendering before updating `main` or refreshing README screenshots.
+
+Local route:
+
+```powershell
+http://localhost:3000/acceptance/rich-text-v1
+```
+
+Tracked evidence:
+
+- fixtures: `docs/acceptance/rich-text-v1/fixtures/`
+- screenshots: `docs/acceptance/rich-text-v1/screenshots/`
+- report: `docs/acceptance/rich-text-v1/acceptance-report.md`
+
+Expected screenshot set:
+
+- `chat-01-streaming-rich.png`
+- `chat-02-markdown-basics.png`
+- `chat-03-code-highlight.png`
+- `chat-04-math-katex-all-syntax.png`
+- `chat-05-mermaid-success.png`
+- `chat-06-mermaid-fallback-with-src.png`
+- `chat-07-html-escaped.png`
+- `chat-08-narrow-viewport.png`
+- `operator-01-plan-summary-rich.png`
+- `operator-02-failure-summary-rich.png`
+- `runtime-01-execution-summary-rich.png`
+- `runtime-02-approval-summary-rich.png`
+- `runtime-03-raw-logs-monospace.png`
+
+Guardrails:
+
+- streaming should stay rich-rendered without breaking on partial Markdown or Mermaid fences
+- Mermaid failures must degrade locally with visible source
+- raw logs / stderr / JSON payloads must remain plain monospace output
+- use fixed fixtures for acceptance evidence instead of ad-hoc live conversations
+
 ## Knowledge indexing behavior
 
 - builtin knowledge packs can sync without embeddings

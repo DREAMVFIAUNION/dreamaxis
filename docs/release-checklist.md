@@ -50,14 +50,17 @@ Use this checklist before publishing or refreshing the public GitHub repository.
 - [ ] `/runtime` shows execution bundle, parent/child linkage, and jump-back to the source conversation
 - [ ] `docs/chat-acceptance-report-v0.2.md` is current
 - [ ] `docs/chat-acceptance-report-nvidia.md` is current
+- [ ] `docs/acceptance/rich-text-v1/acceptance-report.md` is current
 
 ## Assets
 
 - [ ] logo/favicon assets are committed
 - [ ] acceptance screenshots are up to date
+- [ ] rich-text fixture screenshots are complete (`13/13`)
 - [ ] sample screenshots match the current UI
-- [ ] `docs/assets/readme/dreamaxis-chat.png` reflects the current chat-first repo copilot UI
-- [ ] `docs/assets/readme/dreamaxis-runtime.png` reflects the current runtime control plane UI
+- [ ] `docs/assets/readme/dreamaxis-chat.png` reflects the current operator-first chat console UI
+- [ ] `docs/assets/readme/dreamaxis-runtime.png` reflects the current runtime audit plane UI
+- [ ] README rich-text references still point at tracked files under `docs/acceptance/rich-text-v1/screenshots/`
 
 ## Optional polish
 

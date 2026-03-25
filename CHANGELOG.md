@@ -6,6 +6,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 
 ## [Unreleased]
 
+### Added
+
+- rich text v1 rendering foundation for `@dreamaxis/web`, including:
+  - shared Markdown/GFM renderer for chat, operator, and runtime explanatory text
+  - syntax-highlighted code blocks with copy affordances and long-block collapse
+  - KaTeX math rendering for `$...$`, `\(...\)`, `$$...$$`, and `\[...\]` fixture coverage
+  - client-side Mermaid rendering with local failure isolation and visible source fallback
+- deterministic rich-text acceptance harness at `/acceptance/rich-text-v1` with fixed fixtures and 13 tracked screenshot artifacts
+- rich-text acceptance evidence docs under `docs/acceptance/rich-text-v1/`
+
+### Changed
+
+- streaming chat responses now use tolerant rich rendering instead of plain `<pre>` output, reducing completion-state layout jumps
+- operator and runtime explanatory summaries now share the same safe rich-content renderer while raw logs, stderr, and JSON payloads remain monospace
+- README and screenshot index now reference the tracked rich-text acceptance screenshot set directly
+
+### Validated
+
+- `pnpm --dir D:\DreamAxis\dreamaxis --filter @dreamaxis/web build`
+- fixed-fixture rich-text acceptance coverage across chat, operator, runtime, Mermaid fallback, HTML escaping, and narrow viewport rendering
+
 ### Planned
 
 - v0.3 desktop-operator roadmap docs and motion-console direction
