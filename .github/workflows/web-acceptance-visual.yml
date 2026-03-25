@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: |
           $target = "http://127.0.0.1:3000/acceptance/rich-text-v1"
-          $pid = [int]$env:WEB_PID
+          $webPid = [int]$env:WEB_PID
           $stdout = $env:WEB_STDOUT
           $stderr = $env:WEB_STDERR
 
@@ -91,9 +91,9 @@ jobs:
           $lastError = $null
 
           for ($i = 1; $i -le 60; $i++) {
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $process = Get-Process -Id $webPid -ErrorAction SilentlyContinue
             if (-not $process) {
-              Write-Host "Web process $pid exited before readiness probe succeeded."
+              Write-Host "Web process $webPid exited before readiness probe succeeded."
               Show-LogFull $stdout "web stdout"
               Show-LogFull $stderr "web stderr"
               Write-Host "---- netstat :3000 ----"
