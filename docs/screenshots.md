@@ -18,6 +18,15 @@ These are the stable, repo-tracked files that should remain safe for:
 - long-lived documentation
 - future release note references
 
+README also now references the rich-text acceptance screenshot set directly from:
+
+- `docs/acceptance/rich-text-v1/screenshots/chat-02-markdown-basics.png`
+- `docs/acceptance/rich-text-v1/screenshots/chat-03-code-highlight.png`
+- `docs/acceptance/rich-text-v1/screenshots/chat-04-math-katex-all-syntax.png`
+- `docs/acceptance/rich-text-v1/screenshots/chat-05-mermaid-success.png`
+- `docs/acceptance/rich-text-v1/screenshots/chat-06-mermaid-fallback-with-src.png`
+- `docs/acceptance/rich-text-v1/screenshots/operator-01-plan-summary-rich.png`
+
 Recommended README order:
 
 1. `dreamaxis-dashboard.png`
@@ -76,6 +85,9 @@ Try to keep screenshots:
 - visually aligned with the current README narrative
 
 Latest refresh notes:
+
+- `2026-03-25`: README now includes a dedicated "Rich Text v1 acceptance samples" section that references deterministic screenshot artifacts from `docs/acceptance/rich-text-v1/screenshots/`
+- `2026-03-25`: rich-text README references now cover Markdown basics, code highlighting, KaTeX, Mermaid success, Mermaid fallback with source, and operator explanatory text rendering
 
 - `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-operator.png` added from `artifacts/acceptance/alpha2-operator-queue.png` to represent the alpha.2 approval queue and active-run management surface
 - `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed from `artifacts/acceptance/alpha2-chat-approval.png` and now centers the public chat surface on active-step focus, approval prominence, and operator-linked runtime evidence

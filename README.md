@@ -93,6 +93,18 @@ See:
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 
+### Rich Text v1 acceptance samples
+
+| Chat rendering | Code highlight | Math + KaTeX |
+|---|---|---|
+| ![DreamAxis Rich Text Markdown](docs/acceptance/rich-text-v1/screenshots/chat-02-markdown-basics.png) | ![DreamAxis Rich Text Code](docs/acceptance/rich-text-v1/screenshots/chat-03-code-highlight.png) | ![DreamAxis Rich Text Math](docs/acceptance/rich-text-v1/screenshots/chat-04-math-katex-all-syntax.png) |
+| Final assistant messages now support Markdown, links, lists, tables, and safe rich formatting. | Fenced blocks render with language labels, copy actions, and readable syntax highlighting. | Inline and block math render through KaTeX, including the fixture coverage used in acceptance. |
+
+| Mermaid success | Mermaid fallback | Operator + Runtime rich text |
+|---|---|---|
+| ![DreamAxis Rich Text Mermaid](docs/acceptance/rich-text-v1/screenshots/chat-05-mermaid-success.png) | ![DreamAxis Rich Text Mermaid Fallback](docs/acceptance/rich-text-v1/screenshots/chat-06-mermaid-fallback-with-src.png) | ![DreamAxis Operator Rich Text](docs/acceptance/rich-text-v1/screenshots/operator-01-plan-summary-rich.png) |
+| Mermaid fenced blocks render client-side without changing the message model. | Failed Mermaid diagrams degrade locally with an error card and visible source block. | The same renderer now powers operator and runtime explanatory summaries while raw logs stay monospace. |
+
 ## What you can do with it
 
 ### Run locally
