@@ -196,6 +196,13 @@ export function ChatExecutionBundle({
   const requestedDesktopActions = trace.requested_desktop_actions ?? [];
   const workflowStage = trace.workflow_stage ?? "complete";
   const liveArtifacts = trace.desktop_artifacts ?? [];
+  const operatorPlanId = trace.operator_plan_id;
+  const activeStepId = trace.active_step_id;
+  const activeStep =
+    (trace.steps ?? []).find((item) => (item.runtime_execution_id ?? item.title) === activeStepId) ??
+    (trace.steps ?? []).find((item) => item.status !== "succeeded") ??
+    (trace.steps ?? [])[0];
+  const stepVerificationSummary = trace.step_verification_summary;
 
   return (
     <div className="space-y-4">
@@ -204,12 +211,25 @@ export function ChatExecutionBundle({
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(readiness(trace))}`}>Readiness / {readiness(trace)}</span>
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(trace.trace_summary?.status)}`}>Bundle / {bundleId}</span>
         <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(workflowStage)}`}>Stage / {workflowStage.replaceAll("_", " ")}</span>
+        {trace.operator_plan_status ? (
+          <span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone(trace.operator_plan_status)}`}>
+            Plan / {trace.operator_plan_status.replaceAll("_", " ")}
+          </span>
+        ) : null}
         {parentExecutionId ? (
           <Link
             href={`/runtime?execution=${parentExecutionId}`}
             className="border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100"
           >
             Audit parent runtime
+          </Link>
+        ) : null}
+        {operatorPlanId ? (
+          <Link
+            href={`/operator?plan=${operatorPlanId}`}
+            className="border border-white/10 bg-black/20 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ink"
+          >
+            Open operator plan
           </Link>
         ) : null}
       </div>
@@ -224,6 +244,22 @@ export function ChatExecutionBundle({
         <StepMeta label="Evidence items" value={evidenceItems.length} />
         <StepMeta label="Artifacts" value={liveArtifacts.length || trace.artifact_summaries?.length || 0} />
       </motion.div>
+
+      {activeStep || stepVerificationSummary ? (
+        <SectionCard title="Active operator focus">
+          <div className="grid gap-3 xl:grid-cols-[0.8fr_1.2fr]">
+            <div className="border border-white/5 bg-black/20 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Pinned step</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{activeStep?.title ?? "No active step"}</p>
+              <p className="mt-2 text-xs leading-6 text-mutedInk">{activeStep?.summary ?? "The current turn is waiting for the next operator decision."}</p>
+            </div>
+            <div className="border border-white/5 bg-black/20 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Step verification</p>
+              <p className="mt-2 text-sm leading-7 text-ink">{stepVerificationSummary ?? activeStep?.output_excerpt ?? "No step verification summary yet."}</p>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
 
       <div className="grid gap-3 xl:grid-cols-2">
         <SectionCard title="Intent / plan">
@@ -347,7 +383,7 @@ export function ChatExecutionBundle({
                 : step.command_preview
                   ? JSON.stringify(step.command_preview)
                   : primaryGroundedTarget?.value ?? "--");
-            const stepIsOpen = step.status !== "succeeded";
+            const stepIsOpen = step.status !== "succeeded" || step.runtime_execution_id === activeStep?.runtime_execution_id;
 
             return (
               <motion.div key={step.runtime_execution_id} layout {...operatorCardMotion}>

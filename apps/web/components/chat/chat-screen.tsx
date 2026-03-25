@@ -115,18 +115,27 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const selectedConnection = connections.find((item) => item.id === selectedConnectionId) ?? null;
   const approvalState = selectedTrace?.desktop_action_approval?.status ?? "not_required";
 
-  async function handleDesktopApproval(executionId: string, decision: "approved" | "denied") {
+  async function handleDesktopApproval(executionId: string, decision: "approved" | "denied", operatorPlanId?: string | null) {
     const token = getAuthToken();
     if (!token) return;
     setApprovalPendingExecutionId(executionId);
     setError(null);
     try {
-      const response = await apiClient.reviewDesktopApproval(token, executionId, { decision });
-      const updatedTrace = response.data.execution_trace ?? traceFromRuntimeExecution(response.data.execution);
-      if (updatedTrace) {
+      if (operatorPlanId) {
+        const response =
+          decision === "approved"
+            ? await apiClient.approveOperatorPlan(token, operatorPlanId)
+            : await apiClient.denyOperatorPlan(token, operatorPlanId);
+        const updatedTrace = toTrace(response.data.trace_json);
         setLastTrace(updatedTrace);
       } else {
-        setLastTrace(null);
+        const response = await apiClient.reviewDesktopApproval(token, executionId, { decision });
+        const updatedTrace = response.data.execution_trace ?? traceFromRuntimeExecution(response.data.execution);
+        if (updatedTrace) {
+          setLastTrace(updatedTrace);
+        } else {
+          setLastTrace(null);
+        }
       }
       const runtimeRes = await apiClient.getRuntimeExecutions(token, { conversation_id: conversationId });
       setRuntime(runtimeRes.data);
@@ -164,6 +173,16 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
                   <p className="mt-2 text-sm font-semibold text-ink">{value}</p>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/operator" className="border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-cyan-100">
+                Open operator queue
+              </Link>
+              {selectedTrace?.operator_plan_id ? (
+                <Link href={`/operator?plan=${selectedTrace.operator_plan_id}`} className="border border-white/10 bg-black/20 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-ink">
+                  Open current plan
+                </Link>
+              ) : null}
             </div>
             <div className="operator-live-rail mt-5 grid gap-3 border border-white/5 bg-black/25 px-4 py-4 md:grid-cols-[1fr_1fr_auto]">
               <label className="flex flex-col gap-2 text-[10px] uppercase tracking-[0.2em] text-mutedInk">
@@ -227,7 +246,7 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
                       approvalPending={approvalPendingExecutionId === message.runtime_execution_id}
                       onReviewDesktopApproval={
                         message.runtime_execution_id
-                          ? (decision) => handleDesktopApproval(message.runtime_execution_id as string, decision)
+                          ? (decision) => handleDesktopApproval(message.runtime_execution_id as string, decision, trace?.operator_plan_id)
                           : null
                       }
                     />
@@ -252,7 +271,7 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
                       approvalPending={approvalPendingExecutionId === (latestChatRuntime?.id ?? null)}
                       onReviewDesktopApproval={
                         latestChatRuntime?.id
-                          ? (decision) => handleDesktopApproval(latestChatRuntime.id, decision)
+                          ? (decision) => handleDesktopApproval(latestChatRuntime.id, decision, lastTrace?.operator_plan_id ?? selectedTrace?.operator_plan_id)
                           : null
                       }
                     />

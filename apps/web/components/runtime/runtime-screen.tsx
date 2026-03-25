@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { ExecutionAnnotation, RuntimeExecution, RuntimeSession, RuntimeSessionEvent, RuntimeHost, Workspace } from "@dreamaxis/client";
 import { AppShell } from "@/components/app-shell/app-shell";
@@ -164,6 +165,7 @@ export function RuntimeScreen() {
     const approval = (trace as Record<string, unknown>).desktop_action_approval;
     return approval && typeof approval === "object" ? (approval as Record<string, unknown>) : null;
   }, [selectedExecution?.details_json]);
+  const operatorPlanId = selectedExecution?.operator_plan_id;
 
   return (
     <AppShell>
@@ -337,6 +339,7 @@ export function RuntimeScreen() {
                       <p>Connection: {selectedExecution.provider_connection_name ?? "--"}</p>
                       <p>Model: {selectedExecution.resolved_model_name ?? "--"}</p>
                       <p>Bundle: {selectedExecution.execution_bundle_id ?? "--"}</p>
+                      <p>Operator plan: {selectedExecution.operator_plan_id ?? "--"}</p>
                       <p>Parent execution: {selectedExecution.parent_execution_id ?? "--"}</p>
                       <p>Created: {fmtDate(selectedExecution.created_at)}</p>
                       <p>Completed: {fmtDate(selectedExecution.completed_at)}</p>
@@ -364,6 +367,14 @@ export function RuntimeScreen() {
                         <a href={`/chat/${selectedExecution.conversation_id}`} className="mt-2 inline-block text-signal">
                           Open source conversation
                         </a>
+                      </div>
+                    ) : null}
+                    {operatorPlanId ? (
+                      <div className="mt-3 border-t border-white/5 pt-3 text-xs text-mutedInk">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Operator plan</p>
+                        <Link href={`/operator?plan=${operatorPlanId}`} className="mt-2 inline-block text-signal">
+                          Open linked operator plan
+                        </Link>
                       </div>
                     ) : null}
                   </div>
@@ -431,6 +442,13 @@ export function RuntimeScreen() {
                     </div>
                   ) : null}
 
+                  {selectedExecution.operator_stage ? (
+                    <div className="border border-white/5 bg-black/25 px-4 py-4">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Operator stage</p>
+                      <p className="mt-2 text-sm text-ink">{selectedExecution.operator_stage.replaceAll("_", " ")}</p>
+                    </div>
+                  ) : null}
+
                   <div className="border border-white/5 bg-black/25 px-4 py-4">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Session event stream</p>
                     <div className="mt-3">
@@ -447,20 +465,20 @@ export function RuntimeScreen() {
                         <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Artifacts</p>
                         <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{selectedArtifacts.length} captured</span>
                       </div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
                         {selectedArtifacts.map((artifact, index) => {
                           const dataUrl = typeof artifact.data_url === "string" ? artifact.data_url : null;
                           const name = typeof artifact.name === "string" ? artifact.name : `artifact-${index + 1}`;
                           return dataUrl ? (
-                            <figure key={`${name}-${index}`} className="overflow-hidden border border-white/5 bg-black/20">
+                            <figure key={`${name}-${index}`} className="min-w-[18rem] overflow-hidden border border-white/5 bg-black/20">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={dataUrl} alt={name} className="w-full object-cover" />
+                              <img src={dataUrl} alt={name} className="h-56 w-full object-cover" />
                               <figcaption className="border-t border-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-mutedInk">
                                 {name}
                               </figcaption>
                             </figure>
                           ) : (
-                            <pre key={`${name}-${index}`} className="whitespace-pre-wrap border border-white/5 bg-black/20 px-3 py-3 font-sans text-xs leading-6 text-ink">
+                            <pre key={`${name}-${index}`} className="min-w-[18rem] whitespace-pre-wrap border border-white/5 bg-black/20 px-3 py-3 font-sans text-xs leading-6 text-ink">
                               {JSON.stringify(artifact, null, 2)}
                             </pre>
                           );

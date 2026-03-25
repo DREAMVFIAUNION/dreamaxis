@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquareText, Database, Sparkles, Cpu, Wrench, ScrollText, Shield } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, MonitorSmartphone, Database, Sparkles, Cpu, Wrench, ScrollText, Shield } from "lucide-react";
 import { moduleNavigation } from "@dreamaxis/ui";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { cn } from "@/lib/utils";
 
-const icons = [LayoutDashboard, MessageSquareText, Database, Sparkles, Cpu, Wrench, ScrollText, Shield];
+const icons = [LayoutDashboard, MessageSquareText, MonitorSmartphone, Database, Sparkles, Cpu, Wrench, ScrollText, Shield];
 
 export function SidebarNav() {
   const pathname = usePathname();

@@ -26,3 +26,22 @@ export const operatorStageMotion = {
   },
 };
 
+export const operatorStripMotion = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: {
+    duration: operatorMotion.duration.fast,
+    ease: operatorMotion.ease,
+  },
+};
+
+export const operatorArtifactMotion = {
+  initial: { opacity: 0, scale: 0.98 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.98 },
+  transition: {
+    duration: operatorMotion.duration.base,
+    ease: operatorMotion.ease,
+  },
+};
+

@@ -21,6 +21,7 @@ export const dreamAxisTheme = {
 export const moduleNavigation = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/chat/local-demo", label: "Chat" },
+  { href: "/operator", label: "Operator" },
   { href: "/knowledge", label: "Knowledge" },
   { href: "/skills", label: "Skills" },
   { href: "/runtime", label: "Runtime" },
