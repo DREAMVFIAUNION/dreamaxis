@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
+import "katex/dist/katex.min.css";
+import "@/components/rich-content/rich-content.css";
 import "./globals.css";
 import { UIProviders } from "@/components/providers/ui-providers";
 

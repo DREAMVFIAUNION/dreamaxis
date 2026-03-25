@@ -6,6 +6,7 @@ import type { ChatExecutionTrace, ChatEvidenceItem, DesktopExecutionArtifact, Ru
 import { AnimatePresence, motion } from "framer-motion";
 import { operatorCardMotion, operatorMotion, operatorPinnedRailMotion, operatorStageMotion } from "@/lib/operator-motion";
 import { ActiveStepPin } from "@/components/chat/active-step-pin";
+import { RichContentRenderer } from "@/components/rich-content/rich-content-renderer";
 
 const FAILURE_TYPE_LABELS: Record<string, string> = {
   dependency_or_install: "Dependency / install",
@@ -147,7 +148,7 @@ function renderEvidence(evidence: ChatEvidenceItem, runtimeIndex: Map<string, Ru
 
       {hasExpandableBody ? (
         <div className="mt-3 border-t border-white/5 pt-3">
-          <p className="text-xs leading-6 text-ink">{evidence.content}</p>
+          <div className="text-xs text-ink"><RichContentRenderer content={evidence.content} compact /></div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <StepMeta label="Path" value={evidence.path} />
             <StepMeta label="URL" value={evidence.current_url} />
@@ -252,11 +253,11 @@ export function ChatExecutionBundle({
             <div className="border border-white/5 bg-black/20 px-3 py-3">
               <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Pinned step</p>
               <p className="mt-2 text-sm font-semibold text-ink">{activeStep?.title ?? "No active step"}</p>
-              <p className="mt-2 text-xs leading-6 text-mutedInk">{activeStep?.summary ?? "The current turn is waiting for the next operator decision."}</p>
+              <div className="mt-2 text-xs text-mutedInk"><RichContentRenderer content={activeStep?.summary ?? "The current turn is waiting for the next operator decision."} compact /></div>
             </div>
             <div className="border border-white/5 bg-black/20 px-3 py-3">
               <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Step verification</p>
-              <p className="mt-2 text-sm leading-7 text-ink">{stepVerificationSummary ?? activeStep?.output_excerpt ?? "No step verification summary yet."}</p>
+              <div className="mt-2 text-sm text-ink"><RichContentRenderer content={stepVerificationSummary ?? activeStep?.output_excerpt ?? "No step verification summary yet."} compact /></div>
             </div>
           </div>
           {(trace.steps ?? []).length ? (
@@ -277,7 +278,7 @@ export function ChatExecutionBundle({
         </SectionCard>
         <SectionCard title="Grounded target">
           <div className="space-y-3">
-            {groundingSummary?.summary ? <p className="text-sm leading-7 text-ink">{groundingSummary.summary}</p> : null}
+            {groundingSummary?.summary ? <div className="text-sm text-ink"><RichContentRenderer content={groundingSummary.summary} compact /></div> : null}
             {primaryGroundedTarget ? (
               <div className="border border-cyan-400/20 bg-cyan-500/5 px-3 py-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -319,7 +320,7 @@ export function ChatExecutionBundle({
             }
           >
             <div className="space-y-3">
-              <p className="text-sm leading-7 text-ink">{approval.summary}</p>
+              <div className="text-sm text-ink"><RichContentRenderer content={approval.summary} compact /></div>
               {approval.reason ? <p className="text-xs leading-6 text-mutedInk">{approval.reason}</p> : null}
               {requestedDesktopActions.length ? (
                 <div className="grid gap-3 xl:grid-cols-2">
@@ -340,7 +341,7 @@ export function ChatExecutionBundle({
                           {action.requires_confirmation ? "confirm required" : "auto"}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-ink">{action.title}</p>
+                      <div className="mt-2 text-sm text-ink"><RichContentRenderer content={action.title} compact allowMermaid={false} /></div>
                       <p className="mt-2 text-xs leading-6 text-mutedInk">
                         {(action.target_window || action.target_app || action.target_label || "desktop").toString()}
                       </p>
@@ -423,7 +424,7 @@ export function ChatExecutionBundle({
                 </summary>
 
                 <div className="mt-3 border-t border-white/5 pt-3">
-                  <p className="text-xs leading-6 text-mutedInk">{step.summary}</p>
+                  <div className="text-xs text-mutedInk"><RichContentRenderer content={step.summary} compact /></div>
                   <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     <StepMeta label="Target" value={stepTarget} />
                     <StepMeta label="Session" value={step.runtime_session_id ?? "--"} />
@@ -467,7 +468,7 @@ export function ChatExecutionBundle({
                 <span className="border border-red-300/20 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-red-100">Why it failed</span>
                 {primaryFailureTarget ? <span className="border border-white/10 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-ink">Focus target ready</span> : null}
               </div>
-              <p className="mt-3 text-sm leading-7 text-ink">{failureSummary}</p>
+              <div className="mt-3 text-sm text-ink"><RichContentRenderer content={failureSummary} compact /></div>
               <div className="mt-4 grid gap-3 xl:grid-cols-2">
                 {primaryFailureTarget ? (
                   <div className="border border-white/10 bg-black/20 px-3 py-3">
@@ -511,7 +512,7 @@ export function ChatExecutionBundle({
         }
       >
         <div className="space-y-3">
-          {reflectionSummary?.summary ? <p className="text-sm leading-7 text-ink">{reflectionSummary.summary}</p> : <p className="text-sm leading-7 text-mutedInk">No reflection pass was needed for this turn.</p>}
+          {reflectionSummary?.summary ? <div className="text-sm text-ink"><RichContentRenderer content={reflectionSummary.summary} compact /></div> : <p className="text-sm leading-7 text-mutedInk">No reflection pass was needed for this turn.</p>}
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <StepMeta label="Triggered" value={reflectionSummary ? (reflectionSummary.triggered ? "yes" : "no") : "no"} />
             <StepMeta label="Confidence" value={reflectionSummary?.confidence ?? null} />
@@ -530,26 +531,31 @@ export function ChatExecutionBundle({
       ) : null}
 
       <SectionCard title="Recommended next step">
-        <ul className="space-y-2 text-sm leading-7 text-ink">
+        <div className="space-y-2 text-sm text-ink">
           {(trace.recommended_next_actions ?? []).map((item) => (
-            <li key={item.label}>
-              - {item.label}
-              {item.reason ? <span className="text-mutedInk"> - {item.reason}</span> : null}
-            </li>
+            <div key={item.label} className="border border-white/5 bg-black/20 px-3 py-3">
+              <RichContentRenderer
+                content={item.reason ? `- ${item.label}
+
+${item.reason}` : `- ${item.label}`}
+                compact
+                allowMermaid={false}
+              />
+            </div>
           ))}
-        </ul>
+        </div>
       </SectionCard>
 
       {trace.proposal ? (
         <SectionCard title="Proposal output" aside={<span className={`border px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${tone("warn")}`}>not applied</span>}>
-          <p className="text-sm leading-7 text-ink">{trace.proposal.summary}</p>
+          <div className="text-sm text-ink"><RichContentRenderer content={trace.proposal.summary} compact /></div>
           {primaryFailureTarget || primaryGroundedTarget?.value ? (
             <div className="mt-3 border border-amber-300/20 bg-amber-500/5 px-3 py-3">
               <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Focus target</p>
               <p className="mt-2 break-all text-xs leading-6 text-ink">{primaryFailureTarget ?? primaryGroundedTarget?.value}</p>
             </div>
           ) : null}
-          {trace.proposal.patch_summary ? <p className="mt-4 text-xs leading-6 text-mutedInk">{trace.proposal.patch_summary}</p> : null}
+          {trace.proposal.patch_summary ? <div className="mt-4 text-xs text-mutedInk"><RichContentRenderer content={trace.proposal.patch_summary} compact allowMermaid={false} /></div> : null}
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <details className="border border-white/5 bg-black/20 px-3 py-3" open>
               <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">Affected files ({trace.proposal.targets.length})</summary>

@@ -1,4 +1,5 @@
-import type { KnowledgeChunkReference } from "@dreamaxis/client";
+﻿import type { KnowledgeChunkReference } from "@dreamaxis/client";
+import { RichContentRenderer } from "@/components/rich-content/rich-content-renderer";
 import { cn } from "@/lib/utils";
 
 type MessageRole = "system" | "user" | "assistant";
@@ -17,6 +18,9 @@ export function StreamMessage({
   details?: React.ReactNode;
 }) {
   const hasStructuredBundle = role === "assistant" && Boolean(details);
+  const renderContent = (
+    <RichContentRenderer content={content} streaming={pending} />
+  );
 
   return (
     <article
@@ -37,10 +41,10 @@ export function StreamMessage({
           <summary className="cursor-pointer text-[10px] uppercase tracking-[0.22em] text-mutedInk">
             Model synthesis / raw assistant response
           </summary>
-          <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
+          <div className="mt-3">{renderContent}</div>
         </details>
       ) : (
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-ink">{content}</pre>
+        <div>{renderContent}</div>
       )}
 
       {sources?.length ? (

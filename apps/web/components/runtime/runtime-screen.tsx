@@ -7,6 +7,7 @@ import type { ExecutionAnnotation, RuntimeExecution, RuntimeSession, RuntimeSess
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
 import { ExecutionTimeline } from "@/components/execution/execution-timeline";
+import { RichContentRenderer } from "@/components/rich-content/rich-content-renderer";
 import { apiClient } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
@@ -380,7 +381,7 @@ export function RuntimeScreen() {
                   <div className="border border-white/5 bg-black/25 px-4 py-4">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Execution summary</p>
                     <p className="mt-2 text-lg font-semibold text-ink">{selectedExecution.trace_summary?.headline ?? selectedExecution.status}</p>
-                    <p className="mt-2 leading-7">{selectedExecution.trace_summary?.summary ?? selectedExecution.response_preview ?? selectedExecution.error_message ?? "No summary available."}</p>
+                    <div className="mt-2"><RichContentRenderer content={selectedExecution.trace_summary?.summary ?? selectedExecution.response_preview ?? selectedExecution.error_message ?? "No summary available."} compact /></div>
                     <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                       <p>Kind: {selectedExecution.execution_kind}</p>
                       <p>Mode: {selectedExecution.mode ?? "--"}</p>
@@ -495,7 +496,7 @@ export function RuntimeScreen() {
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <p className="font-semibold text-ink">{String(step.title ?? `Step ${index + 1}`)}</p>
-                                    <p className="mt-1 text-xs text-mutedInk">{String(step.summary ?? "No summary")}</p>
+                                    <div className="mt-1 text-xs text-mutedInk"><RichContentRenderer content={String(step.summary ?? "No summary")} compact /></div>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${statusTone(stepStatus)}`}>{stepStatus}</span>
@@ -577,9 +578,7 @@ export function RuntimeScreen() {
                                   {String(approvalItem.reviewed_at ?? approvalItem.updated_at ?? selectedExecution.updated_at ?? "--")}
                                 </span>
                               </div>
-                              <p className="mt-2 text-sm leading-7 text-ink">
-                                {String(approvalItem.summary ?? "Desktop approval metadata captured.")}
-                              </p>
+                              <div className="mt-2 text-sm text-ink"><RichContentRenderer content={String(approvalItem.summary ?? "Desktop approval metadata captured.")} compact /></div>
                               {requestedActions.length ? (
                                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                                   {requestedActions.map((action, actionIndex) => (
@@ -607,7 +606,7 @@ export function RuntimeScreen() {
                           {String(selectedApproval.status ?? "pending").replaceAll("_", " ")}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm leading-7 text-ink">{String(selectedApproval.summary ?? "Desktop approval metadata captured.")}</p>
+                      <div className="mt-2 text-sm text-ink"><RichContentRenderer content={String(selectedApproval.summary ?? "Desktop approval metadata captured.")} compact /></div>
                     </div>
                   ) : null}
 

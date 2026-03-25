@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
 import { ChatExecutionBundle } from "@/components/chat/chat-execution-bundle";
+import { RichContentRenderer } from "@/components/rich-content/rich-content-renderer";
 import { apiClient } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { operatorCardMotion } from "@/lib/operator-motion";
@@ -356,7 +357,7 @@ export function OperatorScreen() {
                           ))}
                         </div>
                         <p className="mt-3 font-semibold text-ink">{template.title}</p>
-                        <p className="mt-2 text-sm leading-6 text-mutedInk">{template.description}</p>
+                        <div className="mt-2 text-sm text-mutedInk"><RichContentRenderer content={template.description} compact /></div>
                         <div className="mt-4 flex flex-wrap gap-3">
                           <button
                             type="button"
@@ -474,7 +475,7 @@ export function OperatorScreen() {
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Plan detail</p>
                     <h2 className="mt-2 text-2xl font-black text-ink">{selectedPlan.title}</h2>
-                    <p className="mt-2 text-sm leading-7 text-mutedInk">{selectedPlan.requested_prompt}</p>
+                    <div className="mt-2 text-sm text-mutedInk"><RichContentRenderer content={selectedPlan.requested_prompt} compact /></div>
                   </div>
                   <button
                     type="button"
@@ -526,9 +527,7 @@ export function OperatorScreen() {
                 </div>
 
                 {selectedPlan.last_failure_summary ? (
-                  <div className="mt-5 border border-red-400/20 bg-red-500/10 px-4 py-4 text-sm leading-7 text-red-100">
-                    {selectedPlan.last_failure_summary}
-                  </div>
+                  <div className="mt-5 border border-red-400/20 bg-red-500/10 px-4 py-4 text-sm text-red-100"><RichContentRenderer content={selectedPlan.last_failure_summary} compact /></div>
                 ) : null}
 
                 <div className="mt-5">

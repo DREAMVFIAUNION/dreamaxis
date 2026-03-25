@@ -1,0 +1,13 @@
+stdout:
+[info] capture viewport screenshot
+[info] artifact stored at artifacts/browser-01.png
+
+stderr:
+[warn] OCR confidence below threshold for one region
+
+payload.json:
+{
+  "operator_plan_id": "plan_demo_001",
+  "operator_stage": "pending_approval",
+  "step_verification_summary": "OCR needs manual confirmation"
+}

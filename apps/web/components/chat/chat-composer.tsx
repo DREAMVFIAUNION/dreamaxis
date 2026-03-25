@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import type { ChatMode } from "@dreamaxis/client";
@@ -64,7 +64,7 @@ export function ChatComposer({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           rows={6}
-          placeholder="Ask DreamAxis to inspect a repo, verify a desktop surface, or prepare a gated operator action..."
+          placeholder="Ask DreamAxis to inspect a repo, verify a desktop surface, or prepare a gated operator action... Markdown / LaTeX / Mermaid syntax is supported in rendered replies."
           className="w-full resize-none border border-white/10 bg-black/20 px-4 py-4 text-sm text-ink outline-none placeholder:text-mutedInk/80 focus:border-signal/40"
         />
         <div className="flex min-w-[220px] flex-col gap-3 border border-white/8 bg-black/20 p-4">
@@ -115,3 +115,4 @@ export function ChatComposer({
     </form>
   );
 }
+
