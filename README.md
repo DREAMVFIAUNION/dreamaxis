@@ -1,15 +1,15 @@
-ï»¿<p align="center">
+<p align="center">
   <img src="docs/assets/readme/dreamaxis-icon.png" alt="DreamAxis logo" width="112" />
 </p>
 
 <h1 align="center">DreamAxis</h1>
 
 <p align="center">
-  <strong>Local-first open-source agent execution platform for self-hosted AI workflows.</strong>
+  <strong>Local-first open-source operator workflow platform for self-hosted AI execution.</strong>
 </p>
 
 <p align="center">
-  DreamAxis turns models, runtimes, skills, and knowledge into reusable local assets instead of a hosted black box.
+  DreamAxis turns chat into a runtime-backed operator console for CLI, browser, and desktop work ¡ª with approval gates, audit trails, and rich final outputs instead of a hosted black box.
 </p>
 
 <p align="center">
@@ -27,19 +27,22 @@ DreamAxis is built for operators and builders who want:
 
 - **no signup by default** with `AUTH_MODE=local_open`
 - **self-hosted provider keys** instead of a central account dependency
+- **OperatorPlan-backed execution** instead of disconnected one-off prompts
 - **CLI + Browser + Desktop runtimes** for real execution, not chat alone
-- **skill packs** that can be reused, imported, and expanded
-- **knowledge packs + uploads** that compound into durable project memory
+- **approval-gated desktop actions** with runtime-backed audit and resume support
+- **proposal-only repo/code repair lanes** instead of silent file edits
+- **rich final outputs** with Markdown, code highlighting, KaTeX, and Mermaid rendering
 - a stronger local baseline aligned with modern desktop coding assistants:
   **Git + Node.js + pnpm/npm + Python**
 
 ## The core promise
 
-DreamAxis is designed around four simple defaults:
+DreamAxis is designed around five simple defaults:
 
 - **local-first** - run on your own machine and infrastructure first
 - **no-signup by default** - the main path starts with `AUTH_MODE=local_open`
-- **runtime-centric** - use CLI, browser, and desktop execution instead of chat text alone
+- **operator-first** - multi-step work is routed through plans, approvals, and visible execution state
+- **runtime-backed audit** - chat, operator, and runtime stay linked to the same evidence trail
 - **self-hosted assets** - keep provider keys, skills, knowledge, and workspace data under your control
 
 ## Verified acceptance status
@@ -47,25 +50,28 @@ DreamAxis is designed around four simple defaults:
 Latest local acceptance baseline:
 
 - **v0.3.0-alpha.2 operator workflow:** `9/9` scenarios passed across inspect desktop, verify browser, operate with approval, triad summary, failure reflection narrowing, and repo non-regression lanes
+- **rich text v1 rendering:** fixed-fixture acceptance captured in `13` tracked screenshots across chat, operator, runtime, Mermaid fallback, HTML escaping, and narrow viewport coverage
 - **v0.2 chat-first repo copilot:** `8/8` scenarios passed
 - **NVIDIA Build provider validation:** `9/9` scenarios passed
 - **operator workflow core:** multi-step OperatorPlan execution, approval queue handling, bounded reflection, deterministic desktop grounding, and resume are now validated end to end
 - **operator surfaces:** `/chat`, `/operator`, and `/runtime` now divide cleanly into live operation, approval management, and deep audit
-- **grounded verify / troubleshoot loop:** grounded targets, reflection-aware follow-up, failure summaries, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
+- **rich output layer:** final assistant and operator summaries now support Markdown, tables, code highlighting, KaTeX, and Mermaid without changing the backend message model
 - **Windows host desktop runtime:** inspect, verify, and approval-gated operate flows validated with real `focus_window`, `launch_app`, `press_hotkey`, `type_text`, and `click` actions
 - validated across:
   - DreamAxis
   - a Node.js repo
   - a Python repo
 - focused on:
-  - visible chat modes
-  - verify / troubleshoot flows
+  - visible operator state
+  - approval-gated desktop action
   - proposal-only repair output
   - runtime-backed evidence and parent/child execution linkage
+  - rich final-message rendering
 
 See:
 
 - [docs/acceptance-report-alpha2.md](./docs/acceptance-report-alpha2.md)
+- [docs/acceptance/rich-text-v1/acceptance-report.md](./docs/acceptance/rich-text-v1/acceptance-report.md)
 - [docs/chat-acceptance-report-v0.2.md](./docs/chat-acceptance-report-v0.2.md)
 - [docs/chat-acceptance-report-nvidia.md](./docs/chat-acceptance-report-nvidia.md)
 - [docs/repo-copilot-runbook.md](./docs/repo-copilot-runbook.md)
@@ -84,12 +90,12 @@ See:
 | Skills | Operator | Runtime |
 |---|---|---|
 | ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Operator](docs/assets/readme/dreamaxis-operator.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
-| Skill packs, execution entrypoints, and capability-aware actions. | Approval queue, active runs, templates, and plan-level controls for operator-managed execution. | Runtime hosts, operator lineage, verification summaries, artifact-first audit, and child execution trails back to chat turns. |
+| Skill packs, execution entrypoints, and capability-aware actions. | Approval queue, active runs, templates, and plan-level controls for OperatorPlan-managed execution. | Runtime hosts, operator lineage, verification summaries, artifact-first audit, and child execution trails back to chat turns. |
 
 | Knowledge | Chat |
 |---|---|
 | ![DreamAxis Knowledge](docs/assets/readme/dreamaxis-knowledge.png) | ![DreamAxis Chat](docs/assets/readme/dreamaxis-chat.png) |
-| Builtin packs, uploaded documents, and retrieval-ready assets. | Operator-first chat console with active-step emphasis, approval prominence, runtime evidence, and proposal-only repo repair guidance. |
+| Builtin packs, uploaded documents, and retrieval-ready assets. | Operator-first chat console with active-step emphasis, approval prominence, runtime evidence, and rich final-message rendering for Markdown, code, math, and Mermaid. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 
@@ -106,6 +112,12 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 | Mermaid fenced blocks render client-side without changing the message model. | Failed Mermaid diagrams degrade locally with an error card and visible source block. | The same renderer now powers operator and runtime explanatory summaries while raw logs stay monospace. |
 
 ## What you can do with it
+
+DreamAxis now presents a clear alpha.2 shape:
+
+- `/chat` = the live operator console
+- `/operator` = approvals, queues, templates, and plan management
+- `/runtime` = audit, lineage, artifacts, and execution detail
 
 ### Run locally
 
@@ -128,6 +140,7 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 - manage OperatorPlan approvals and active runs from `/operator`
 - follow active-step state in `/chat` and deep lineage in `/runtime`
 - review runtime hosts, sessions, executions, and outputs in one place
+- render final assistant and operator summaries with safe rich text instead of raw plain-text dumps
 - use chat-first verify / troubleshoot flows with grounded targets, reflection-aware follow-up, and runtime-backed failure summaries instead of black-box answers
 
 ## What makes it different
@@ -147,8 +160,10 @@ DreamAxis already includes:
 - **CLI Runtime v1**
 - **Browser Runtime v1 (Playwright)**
 - **Desktop Runtime v1 (Windows host worker)**
+- **OperatorPlan alpha.2 workflow layer** with inspect / verify / operate / proposal sequencing
 - runtime/session/execution visibility in the web console
 - chat-first troubleshooting summaries and approval-gated desktop actions backed by runtime evidence, not prose-only diagnosis
+- rich final-message rendering that upgrades explanatory output without changing the execution backend
 
 ### Reusable system assets
 
@@ -240,13 +255,14 @@ DreamAxis does **not** require a hosted account system for the default path.
 ## Core routes
 
 - `/dashboard`
-- `/chat/[conversationId]`
-- `/operator`
+- `/chat/[conversationId]` - live operator console with approval-aware execution state and rich final outputs
+- `/operator` - approval queue, active runs, templates, and plan management
 - `/skills`
 - `/knowledge`
-- `/runtime`
+- `/runtime` - audit plane with lineage, artifacts, raw logs, and execution detail
 - `/environment`
 - `/settings/providers`
+- `/acceptance/rich-text-v1` - fixed-fixture rendering acceptance harness
 - `/login` (only for optional `password` mode)
 
 ## Read the docs
@@ -257,6 +273,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/browser-runtime.md](./docs/browser-runtime.md)
 - [docs/acceptance-report-alpha2.md](./docs/acceptance-report-alpha2.md)
 - [docs/desktop-runtime-v1.md](./docs/desktop-runtime-v1.md)
+- [docs/acceptance/rich-text-v1/acceptance-report.md](./docs/acceptance/rich-text-v1/acceptance-report.md)
 - [docs/skill-packs.md](./docs/skill-packs.md)
 - [docs/knowledge-packs.md](./docs/knowledge-packs.md)
 - [docs/backend-api.md](./docs/backend-api.md)
@@ -277,6 +294,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 ## License
 
 DreamAxis is released under the [MIT License](./LICENSE).
+
 
 
 
