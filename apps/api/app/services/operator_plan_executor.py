@@ -127,12 +127,16 @@ def _aggregate_plan_state(plan: OperatorPlan) -> None:
     plan.pending_approval_count = sum(1 for step in steps if str(step.get("status") or "") == "pending_approval")
     child_ids: list[str] = []
     artifacts: list[dict[str, Any]] = []
+    approvals: list[dict[str, Any]] = []
     last_failure = None
     for step in steps:
         for key in ("parent_execution_id", "child_execution_id"):
             value = str(step.get(key) or "").strip()
             if value and value not in child_ids:
                 child_ids.append(value)
+        approval = step.get("approval")
+        if isinstance(approval, dict):
+            approvals.append(approval)
         for artifact in step.get("artifacts") or []:
             if isinstance(artifact, dict):
                 artifacts.append(artifact)
@@ -140,6 +144,7 @@ def _aggregate_plan_state(plan: OperatorPlan) -> None:
             last_failure = str(step["output_excerpt"])
     plan.child_execution_ids_json = child_ids
     plan.artifacts_json = artifacts
+    plan.approvals_json = approvals
     plan.last_failure_summary = last_failure
 
 

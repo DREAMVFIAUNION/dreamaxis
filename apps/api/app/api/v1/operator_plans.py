@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.core.db import get_db
@@ -40,6 +41,7 @@ async def _get_conversation_or_404(
         return None
     conversation = await session.scalar(
         select(Conversation)
+        .options(selectinload(Conversation.provider_connection))
         .join(Workspace, Conversation.workspace_id == Workspace.id)
         .where(Conversation.id == conversation_id, Conversation.workspace_id == workspace_id, Workspace.owner_id == user_id)
     )
