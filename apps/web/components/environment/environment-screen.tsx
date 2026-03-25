@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { DoctorCheckResult, Workspace } from "@dreamaxis/client";
 import { AppShell } from "@/components/app-shell/app-shell";
@@ -18,6 +19,41 @@ function statusTone(status?: string | null) {
   if (status === "warn" || status === "degraded") return "text-amber-300";
   if (status === "blocked" || status === "missing") return "text-red-300";
   return "text-mutedInk";
+}
+
+function GuidanceStep({
+  eyebrow,
+  title,
+  summary,
+  href,
+  linkLabel,
+  tone = "neutral",
+}: {
+  eyebrow: string;
+  title: string;
+  summary: string;
+  href?: string;
+  linkLabel?: string;
+  tone?: "neutral" | "warn" | "good";
+}) {
+  const toneClass =
+    tone === "warn"
+      ? "border-amber-300/25 bg-amber-500/10"
+      : tone === "good"
+        ? "border-emerald-400/25 bg-emerald-500/10"
+        : "border-white/5 bg-black/20";
+  return (
+    <div className={`border px-4 py-4 ${toneClass}`}>
+      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">{eyebrow}</p>
+      <p className="mt-2 text-base font-semibold text-ink">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-mutedInk">{summary}</p>
+      {href && linkLabel ? (
+        <Link href={href} className="mt-3 inline-block text-xs font-semibold uppercase tracking-[0.18em] text-signal">
+          {linkLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 export function EnvironmentScreen() {
@@ -68,6 +104,73 @@ export function EnvironmentScreen() {
     ];
   }, [doctor]);
 
+  const firstRunSteps = useMemo(() => {
+    if (!doctor) return [];
+    const hasMissingRequired = doctor.machine_summary.missing_required.length > 0;
+    const hasRuntimes = doctor.runtimes.length > 0;
+    const readySkills = doctor.skill_compatibility.ready ?? 0;
+    return [
+      hasMissingRequired
+        ? {
+            eyebrow: "Do first",
+            title: "Fix required machine tools",
+            summary:
+              "Install every missing required tool on this machine before trusting a skill failure. Git, Node.js, pnpm/npm, and Python define the current desktop baseline.",
+            href: "/environment",
+            linkLabel: "Review machine baseline",
+            tone: "warn" as const,
+          }
+        : {
+            eyebrow: "Baseline ready",
+            title: "Machine baseline is clear",
+            summary:
+              "Required local tools are present. Optional warnings can wait while you connect a provider and run a first execution.",
+            href: "/settings/providers",
+            linkLabel: "Open provider settings",
+            tone: "good" as const,
+          },
+      !hasRuntimes
+        ? {
+            eyebrow: "Next",
+            title: "Start at least one runtime host",
+            summary:
+              "The web shell is up, but no runtime has reported health yet. Start the CLI, Browser, or Desktop worker so the operator surfaces can execute real work.",
+            href: "/runtime",
+            linkLabel: "Inspect runtime registry",
+            tone: "warn" as const,
+          }
+        : {
+            eyebrow: "Connected",
+            title: "Runtime hosts are reporting in",
+            summary:
+              "A runtime has checked in. Next, wire a provider connection and confirm one prompt or runtime-backed skill completes end to end.",
+            href: "/runtime",
+            linkLabel: "Open runtime audit",
+            tone: "good" as const,
+          },
+      {
+        eyebrow: readySkills > 0 ? "Recommended flow" : "Needs setup",
+        title: readySkills > 0 ? "Run one skill and inspect the audit trail" : "Unblock skill coverage before first use",
+        summary:
+          readySkills > 0
+            ? "Use `/skills` or `/chat/local-demo`, then confirm the resulting execution appears in `/runtime` with timeline, artifacts, and summaries."
+            : "Current compatibility shows blocked skills. Use the machine baseline and runtime snapshots below to clear blockers before expecting a stable first run.",
+        href: readySkills > 0 ? "/skills" : "/runtime",
+        linkLabel: readySkills > 0 ? "Open skills" : "Open runtime troubleshooting",
+        tone: readySkills > 0 ? ("neutral" as const) : ("warn" as const),
+      },
+      {
+        eyebrow: "Reference",
+        title: "Follow the seeded local path",
+        summary:
+          "The preferred first-run path remains provider setup -> one CLI or Browser skill -> knowledge sync -> `/chat/local-demo` -> `/runtime` confirmation.",
+        href: "/chat/local-demo",
+        linkLabel: "Open local demo chat",
+        tone: "neutral" as const,
+      },
+    ];
+  }, [doctor]);
+
   return (
     <AppShell>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -98,6 +201,24 @@ export function EnvironmentScreen() {
           </div>
           {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
         </PanelCard>
+
+        {!doctor && loading ? (
+          <PanelCard eyebrow="First-run guidance" title="Collecting machine baseline">
+            <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm leading-7 text-mutedInk">
+              DreamAxis is gathering machine, workspace, and runtime readiness before suggesting a first-run path.
+            </div>
+          </PanelCard>
+        ) : null}
+
+        {doctor ? (
+          <PanelCard eyebrow="First-run guidance" title="Recommended next actions">
+            <div className="grid gap-4 xl:grid-cols-2">
+              {firstRunSteps.map((step) => (
+                <GuidanceStep key={step.title} {...step} />
+              ))}
+            </div>
+          </PanelCard>
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
@@ -165,7 +286,11 @@ export function EnvironmentScreen() {
                   {item}
                 </div>
               ))}
-              {doctor && !doctor.install_guidance.length ? <p className="text-sm text-mutedInk">No fixes required. This machine satisfies the current workspace baseline.</p> : null}
+              {doctor && !doctor.install_guidance.length ? (
+                <div className="border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm leading-7 text-emerald-100">
+                  No fixes required. This machine satisfies the current workspace baseline. Continue with provider setup, one skill run, then confirm the audit trail in <span className="font-semibold text-white">/runtime</span>.
+                </div>
+              ) : null}
             </div>
           </PanelCard>
         </section>

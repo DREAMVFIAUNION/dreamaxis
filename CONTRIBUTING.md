@@ -36,6 +36,8 @@ See:
 
 - [README.md](./README.md)
 - [docs/development.md](./docs/development.md)
+- [docs/screenshots.md](./docs/screenshots.md)
+- [docs/acceptance/rich-text-v1/acceptance-report.md](./docs/acceptance/rich-text-v1/acceptance-report.md)
 
 ## Default validation path
 
@@ -53,6 +55,16 @@ python -m compileall apps/api/app apps/worker/app apps/browser-worker/app
 ```powershell
 cd D:/DreamAxis/dreamaxis
 pnpm --filter @dreamaxis/web build
+```
+
+### Rich-text acceptance visual pass
+
+With the web app running locally:
+
+```powershell
+cd D:/DreamAxis/dreamaxis
+$env:DREAMAXIS_ACCEPTANCE_BASE_URL="http://127.0.0.1:3000"
+pnpm acceptance:rich-text
 ```
 
 ### Local runtime smoke path
@@ -125,6 +137,13 @@ Please include:
 - how you tested it
 - screenshots for UI changes
 - any follow-up work that is intentionally deferred
+
+For first-time contributor doc changes, prefer updating the cross-links together:
+
+- `README.md`
+- `docs/development.md`
+- `docs/screenshots.md`
+- `docs/release-checklist.md`
 
 Use the PR template in `.github/PULL_REQUEST_TEMPLATE.md`.
 

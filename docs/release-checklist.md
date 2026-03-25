@@ -51,6 +51,7 @@ Use this checklist before publishing or refreshing the public GitHub repository.
 - [ ] `docs/chat-acceptance-report-v0.2.md` is current
 - [ ] `docs/chat-acceptance-report-nvidia.md` is current
 - [ ] `docs/acceptance/rich-text-v1/acceptance-report.md` is current
+- [ ] `.github/workflows/web-acceptance-visual.yml` passes for the current branch
 
 ## Assets
 
@@ -66,4 +67,4 @@ Use this checklist before publishing or refreshing the public GitHub repository.
 
 - [ ] tag a release
 - [ ] attach screenshots to the release notes
-- [ ] publish a short “first-run” walkthrough
+- [ ] publish a short "first-run" walkthrough

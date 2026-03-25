@@ -74,6 +74,7 @@ When the UI changes:
 2. choose the canonical images for README usage
 3. copy those images into `docs/assets/readme/`
 4. keep `README.md` and this file pointing only at `docs/assets/readme/`
+5. rerun the fixture-driven rich-text visual gate so `/acceptance/rich-text-v1` stays aligned with tracked baselines
 
 ## Refresh guidance
 
@@ -88,6 +89,7 @@ Latest refresh notes:
 
 - `2026-03-25`: README now includes a dedicated "Rich Text v1 acceptance samples" section that references deterministic screenshot artifacts from `docs/acceptance/rich-text-v1/screenshots/`
 - `2026-03-25`: rich-text README references now cover Markdown basics, code highlighting, KaTeX, Mermaid success, Mermaid fallback with source, and operator explanatory text rendering
+- `2026-03-25`: `.github/workflows/web-acceptance-visual.yml` now rechecks the rich-text fixture screenshots in CI and uploads current/diff artifacts for review
 
 - `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-operator.png` added from `artifacts/acceptance/alpha2-operator-queue.png` to represent the alpha.2 approval queue and active-run management surface
 - `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed from `artifacts/acceptance/alpha2-chat-approval.png` and now centers the public chat surface on active-step focus, approval prominence, and operator-linked runtime evidence

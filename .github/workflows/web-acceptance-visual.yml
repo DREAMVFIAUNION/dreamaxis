@@ -1,0 +1,95 @@
+name: Web Acceptance Visual
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: dreamaxis-web-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rich-text-acceptance:
+    name: Rich text acceptance visual
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile --config.node-linker=hoisted
+
+      - name: Install Playwright browser
+        shell: pwsh
+        run: pnpm exec playwright install chromium
+
+      - name: Build web app
+        shell: pwsh
+        run: pnpm --filter @dreamaxis/web build
+
+      - name: Start web app
+        shell: pwsh
+        run: |
+          $stdout = Join-Path $env:RUNNER_TEMP "dreamaxis-web.out.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "dreamaxis-web.err.log"
+          $process = Start-Process -FilePath "pnpm.cmd" -ArgumentList "--filter", "@dreamaxis/web", "start" -WorkingDirectory (Get-Location) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          "WEB_PID=$($process.Id)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Wait for acceptance route
+        shell: pwsh
+        run: |
+          for ($i = 0; $i -lt 60; $i++) {
+            try {
+              $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3000/acceptance/rich-text-v1
+              if ($response.StatusCode -eq 200) {
+                exit 0
+              }
+            } catch {
+              Start-Sleep -Seconds 2
+            }
+          }
+          throw "Acceptance route did not become ready in time."
+
+      - name: Run rich-text acceptance visual check
+        shell: pwsh
+        env:
+          DREAMAXIS_ACCEPTANCE_BASE_URL: http://127.0.0.1:3000
+        run: pnpm acceptance:rich-text
+
+      - name: Upload visual artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rich-text-acceptance-visual
+          path: |
+            artifacts/acceptance/rich-text-v1
+            ${{ runner.temp }}\dreamaxis-web.out.log
+            ${{ runner.temp }}\dreamaxis-web.err.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop web app
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:WEB_PID) {
+            Stop-Process -Id $env:WEB_PID -Force -ErrorAction SilentlyContinue
+          }

@@ -8,10 +8,14 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "turbo run format",
+    "acceptance:rich-text": "node scripts/run-rich-text-acceptance-visual.mjs",
     "dev:web": "pnpm --filter @dreamaxis/web dev",
     "build:web": "pnpm --filter @dreamaxis/web build"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
     "turbo": "^2.5.5"
   }
 }

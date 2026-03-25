@@ -78,6 +78,32 @@ function getExecutionTrace(execution: RuntimeExecution | null): Record<string, u
   return trace as Record<string, unknown>;
 }
 
+function StatePanel({
+  title,
+  body,
+  children,
+  tone = "neutral",
+}: {
+  title: string;
+  body: string;
+  children?: React.ReactNode;
+  tone?: "neutral" | "warn" | "error";
+}) {
+  const toneClass =
+    tone === "error"
+      ? "border-red-400/20 bg-red-500/10"
+      : tone === "warn"
+        ? "border-amber-300/20 bg-amber-500/10"
+        : "border-dashed border-white/10 bg-black/20";
+  return (
+    <div className={`px-4 py-5 text-sm ${toneClass}`}>
+      <p className="font-semibold text-ink">{title}</p>
+      <p className="mt-2 leading-7 text-mutedInk">{body}</p>
+      {children ? <div className="mt-3">{children}</div> : null}
+    </div>
+  );
+}
+
 export function RuntimeScreen() {
   const searchParams = useSearchParams();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -218,6 +244,7 @@ export function RuntimeScreen() {
     return approval && typeof approval === "object" ? (approval as Record<string, unknown>) : null;
   }, [selectedTrace]);
   const operatorPlanId = selectedExecution?.operator_plan_id;
+  const hasNoRuntimeState = !loading && !runtimes.length && !sessions.length && !executions.length;
 
   return (
     <AppShell>
@@ -265,8 +292,39 @@ export function RuntimeScreen() {
               <span>{loading ? "refreshing" : "live snapshot"}</span>
             </div>
           </div>
-          {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
+          {error ? (
+            <div className="mt-4 border border-red-400/20 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+              <p className="font-semibold">Runtime snapshot could not be refreshed</p>
+              <p className="mt-2 leading-7">{error}</p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-red-100/90">
+                <li>Check that the API and worker processes are still online.</li>
+                <li>Open <Link href="/environment" className="text-signal">/environment</Link> to confirm machine and runtime readiness.</li>
+                <li>Retry after changing the workspace or runtime filter.</li>
+              </ul>
+            </div>
+          ) : null}
         </PanelCard>
+
+        {loading && !runtimes.length && !sessions.length && !executions.length ? (
+          <StatePanel
+            title="Collecting runtime state"
+            body="DreamAxis is querying runtime hosts, sessions, and executions for this workspace before building the audit view."
+          />
+        ) : null}
+
+        {hasNoRuntimeState ? (
+          <StatePanel
+            title="No runtime activity yet"
+            body="This workspace has not produced any runtime state yet. Start a worker, run one skill, or send a chat task so the audit plane has something to inspect."
+            tone="warn"
+          >
+            <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em]">
+              <Link href="/environment" className="border border-white/10 px-3 py-2 text-signal">Open environment doctor</Link>
+              <Link href="/skills" className="border border-white/10 px-3 py-2 text-signal">Run a skill</Link>
+              <Link href="/chat/local-demo" className="border border-white/10 px-3 py-2 text-signal">Open local demo chat</Link>
+            </div>
+          </StatePanel>
+        ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
           <div className="flex flex-col gap-6">
@@ -303,12 +361,19 @@ export function RuntimeScreen() {
                     </div>
                   ))
                 ) : (
-                  <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                    No runtime host is online for this workspace yet. Start the CLI, Browser, or Desktop worker and then refresh this view.
+                <StatePanel
+                  title="No runtime host is online"
+                  body="Start the CLI, Browser, or Desktop worker and then refresh this view. The audit plane only becomes useful after a runtime host has checked in."
+                  tone="warn"
+                >
+                  <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em]">
+                    <Link href="/environment" className="border border-white/10 px-3 py-2 text-signal">Open environment doctor</Link>
+                    <Link href="/skills" className="border border-white/10 px-3 py-2 text-signal">Open skills</Link>
                   </div>
-                )}
-              </div>
-            </PanelCard>
+                </StatePanel>
+              )}
+            </div>
+          </PanelCard>
 
             <PanelCard eyebrow="Active sessions" title="Session registry">
               <div className="space-y-3">
@@ -329,12 +394,18 @@ export function RuntimeScreen() {
                     </div>
                   ))
                 ) : (
-                  <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                    No sessions have been created yet. Once a skill or chat task hits a runtime, reusable sessions will appear here.
+                <StatePanel
+                  title="No runtime sessions yet"
+                  body="Sessions appear after a skill, chat task, or browser flow actually reaches a runtime. Use the seeded local path, then come back here for reusable session context."
+                >
+                  <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em]">
+                    <Link href="/chat/local-demo" className="border border-white/10 px-3 py-2 text-signal">Open local demo chat</Link>
+                    <Link href="/skills" className="border border-white/10 px-3 py-2 text-signal">Run a skill</Link>
                   </div>
-                )}
-              </div>
-            </PanelCard>
+                </StatePanel>
+              )}
+            </div>
+          </PanelCard>
           </div>
 
           <div className="flex flex-col gap-6">
@@ -369,9 +440,16 @@ export function RuntimeScreen() {
                   </table>
                 </div>
               ) : (
-                <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                  No executions yet. Trigger a repo copilot chat, desktop operator turn, CLI skill, or browser skill to populate this console.
-                </div>
+                <StatePanel
+                  title="No executions yet"
+                  body="Trigger a repo copilot chat, desktop operator turn, CLI skill, or browser skill to populate this console. Runtime execution rows are the entry point for the audit plane."
+                >
+                  <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em]">
+                    <Link href="/chat/local-demo" className="border border-white/10 px-3 py-2 text-signal">Open chat</Link>
+                    <Link href="/operator" className="border border-white/10 px-3 py-2 text-signal">Open operator</Link>
+                    <Link href="/skills" className="border border-white/10 px-3 py-2 text-signal">Open skills</Link>
+                  </div>
+                </StatePanel>
               )}
             </PanelCard>
 
@@ -655,9 +733,14 @@ export function RuntimeScreen() {
                   ) : null}
                 </div>
               ) : (
-                <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                  Select an execution from the table to inspect its timeline, failure summary, and session-level event stream.
-                </div>
+                <StatePanel
+                  title={executions.length ? "Select an execution" : "Execution details will appear here"}
+                  body={
+                    executions.length
+                      ? "Pick any execution row above to inspect lineage, summaries, approval history, artifacts, and raw payload details."
+                      : "Once this workspace produces a runtime execution, this panel becomes the detailed audit view for timelines, artifacts, and operator linkage."
+                  }
+                />
               )}
             </PanelCard>
           </div>

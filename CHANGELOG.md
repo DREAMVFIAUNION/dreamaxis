@@ -21,11 +21,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - streaming chat responses now use tolerant rich rendering instead of plain `<pre>` output, reducing completion-state layout jumps
 - operator and runtime explanatory summaries now share the same safe rich-content renderer while raw logs, stderr, and JSON payloads remain monospace
 - README and screenshot index now reference the tracked rich-text acceptance screenshot set directly
+- Environment / Doctor first-run guidance now points operators toward the next local setup action instead of only listing raw readiness data
+- runtime empty, loading, and failure states now use more explicit operator-facing guidance across hosts, sessions, executions, and selected execution detail
+- builtin skill cards now surface richer pack, runtime, safety, and compatibility metadata without changing the skill schema
 
 ### Validated
 
 - `pnpm --dir D:\DreamAxis\dreamaxis --filter @dreamaxis/web build`
 - fixed-fixture rich-text acceptance coverage across chat, operator, runtime, Mermaid fallback, HTML escaping, and narrow viewport rendering
+- rich-text fixture acceptance now has a dedicated CI workflow that captures current/diff artifacts against tracked screenshot baselines
 
 ### Planned
 

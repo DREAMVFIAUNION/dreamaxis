@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import type { AgentRole, DiscoveredModel, ProviderConnection, SkillDefinition, SkillPack, SkillRunResult, Workspace } from "@dreamaxis/client";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
@@ -122,6 +122,10 @@ export function SkillsScreen() {
     }, {});
   }, [skills]);
 
+  const packBySlug = useMemo(() => {
+    return Object.fromEntries(skillPacks.map((pack) => [pack.slug, pack])) as Record<string, SkillPack>;
+  }, [skillPacks]);
+
   const variableKeys = useMemo(() => {
     if (!selectedSkill?.input_schema || typeof selectedSkill.input_schema !== "object") return Object.keys(variables);
     const keys = Object.keys(selectedSkill.input_schema);
@@ -224,29 +228,42 @@ export function SkillsScreen() {
 
           <PanelCard eyebrow="Registry" title="Skill definitions">
             <div className="flex flex-col gap-3">
-              {skills.map((skill) => (
-                <button
-                  key={skill.id}
-                  type="button"
-                  onClick={async () => {
-                    setSelectedSkillId(skill.id);
-                    syncFormState(skill, connections);
-                    if (skill.provider_connection_id) await loadConnectionModels(skill.provider_connection_id);
-                  }}
-                  className={`border px-4 py-4 text-left ${selectedSkill?.id === skill.id ? "border-signal/40 bg-signal/5" : "border-white/5 bg-black/20"}`}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-semibold text-ink">{skill.name}</p>
-                    <span className={`text-[10px] uppercase tracking-[0.18em] ${compatibilityTone(skill.compatibility?.status)}`}>
-                      {skill.skill_mode} / {skill.compatibility?.status ?? (skill.enabled ? "ready" : "disabled")}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs leading-6 text-mutedInk">{skill.description}</p>
-                  <p className="mt-2 text-[11px] text-mutedInk">
-                    Pack: {skill.pack_slug ?? "workspace"} / Role: {skill.agent_role_slug ?? "unassigned"} / Chat: {skill.chat_callable ? "callable" : "manual"}
-                  </p>
-                </button>
-              ))}
+              {skills.map((skill) => {
+                const pack = skill.pack_slug ? packBySlug[skill.pack_slug] : undefined;
+                const scenarioCount = skill.scenario_tags.length;
+                const compatibilityMessage = skill.compatibility?.message?.trim();
+                return (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    onClick={async () => {
+                      setSelectedSkillId(skill.id);
+                      syncFormState(skill, connections);
+                      if (skill.provider_connection_id) await loadConnectionModels(skill.provider_connection_id);
+                    }}
+                    className={`border px-4 py-4 text-left ${selectedSkill?.id === skill.id ? "border-signal/40 bg-signal/5" : "border-white/5 bg-black/20"}`}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="font-semibold text-ink">{skill.name}</p>
+                      <span className={`text-[10px] uppercase tracking-[0.18em] ${compatibilityTone(skill.compatibility?.status)}`}>
+                        {skill.skill_mode} / {skill.compatibility?.status ?? (skill.enabled ? "ready" : "disabled")}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs leading-6 text-mutedInk">{skill.description}</p>
+                    <div className="mt-3 grid gap-2 text-[11px] text-mutedInk md:grid-cols-2">
+                      <p>Pack: {skill.pack_slug ?? "workspace"}{pack?.version ? ` / v${pack.version}` : ""}</p>
+                      <p>Source: {pack?.source_type ?? "workspace"}</p>
+                      <p>Role: {skill.agent_role_slug ?? "unassigned"}</p>
+                      <p>Runtime: {skill.required_runtime_type ?? "prompt-only"}</p>
+                      <p>Safety: {skill.safety_level} / {skill.is_read_only ? "read-only" : "mutable"}</p>
+                      <p>Chat: {skill.chat_callable ? "callable" : "manual"} / Scenarios: {scenarioCount}</p>
+                    </div>
+                    {compatibilityMessage ? (
+                      <p className="mt-2 text-[11px] leading-6 text-mutedInk">Compatibility note: {compatibilityMessage}</p>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </PanelCard>
         </div>

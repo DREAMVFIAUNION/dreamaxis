@@ -222,6 +222,15 @@ Tracked evidence:
 - fixtures: `docs/acceptance/rich-text-v1/fixtures/`
 - screenshots: `docs/acceptance/rich-text-v1/screenshots/`
 - report: `docs/acceptance/rich-text-v1/acceptance-report.md`
+- visual artifacts output: `artifacts/acceptance/rich-text-v1/`
+
+Local command (with the web app already running):
+
+```powershell
+cd D:/DreamAxis/dreamaxis
+$env:DREAMAXIS_ACCEPTANCE_BASE_URL="http://127.0.0.1:3000"
+pnpm acceptance:rich-text
+```
 
 Expected screenshot set:
 
@@ -245,6 +254,7 @@ Guardrails:
 - Mermaid failures must degrade locally with visible source
 - raw logs / stderr / JSON payloads must remain plain monospace output
 - use fixed fixtures for acceptance evidence instead of ad-hoc live conversations
+- CI now mirrors this fixture-driven pass through `.github/workflows/web-acceptance-visual.yml`
 
 ## Knowledge indexing behavior
 
