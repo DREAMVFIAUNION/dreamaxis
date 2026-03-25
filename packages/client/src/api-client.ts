@@ -18,6 +18,8 @@ import type {
   Message,
   MessageCreateInput,
   Model,
+  OperatorPlan,
+  OperatorPlanListResponse,
   PaginatedResponse,
   Provider,
   ProviderConnection,
@@ -270,6 +272,47 @@ export function createApiClient(baseUrl?: string) {
 
       await readSSEStream(response, onEvent);
     },
+    getOperatorPlans: (token: string, workspaceId?: string) =>
+      request<ApiResponse<OperatorPlanListResponse>>(`/api/v1/operator-plans${workspaceId ? `?workspace_id=${workspaceId}` : ""}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    getOperatorPlan: (token: string, operatorPlanId: string) =>
+      request<ApiResponse<OperatorPlan>>(`/api/v1/operator-plans/${operatorPlanId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    createOperatorPlan: (
+      token: string,
+      payload: {
+        workspace_id: string;
+        conversation_id?: string;
+        prompt?: string;
+        mode?: string;
+        template_slug?: string;
+        title?: string;
+      },
+    ) =>
+      request<ApiResponse<OperatorPlan>>("/api/v1/operator-plans", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      }),
+    approveOperatorPlan: (token: string, operatorPlanId: string) =>
+      request<ApiResponse<OperatorPlan>>(`/api/v1/operator-plans/${operatorPlanId}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ decision: "approved" }),
+      }),
+    denyOperatorPlan: (token: string, operatorPlanId: string) =>
+      request<ApiResponse<OperatorPlan>>(`/api/v1/operator-plans/${operatorPlanId}/deny`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ decision: "denied" }),
+      }),
+    resumeOperatorPlan: (token: string, operatorPlanId: string) =>
+      request<ApiResponse<OperatorPlan>>(`/api/v1/operator-plans/${operatorPlanId}/resume`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     getKnowledgeDocuments: (token: string, workspaceId?: string) =>
       request<PaginatedResponse<KnowledgeDocument>>(`/api/v1/knowledge${workspaceId ? `?workspace_id=${workspaceId}` : ""}`, {
         headers: { Authorization: `Bearer ${token}` },

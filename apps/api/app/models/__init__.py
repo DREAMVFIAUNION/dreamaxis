@@ -5,6 +5,7 @@ from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.knowledge_document import KnowledgeDocument
 from app.models.knowledge_pack import KnowledgePack
 from app.models.message import Message
+from app.models.operator_plan import OperatorPlan
 from app.models.provider import Provider
 from app.models.provider_connection import ProviderConnection
 from app.models.runtime_execution import RuntimeExecution
@@ -24,6 +25,7 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgePack",
     "Message",
+    "OperatorPlan",
     "Provider",
     "ProviderConnection",
     "RuntimeExecution",

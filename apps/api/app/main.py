@@ -13,6 +13,7 @@ from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.knowledge_packs import router as knowledge_packs_router
 from app.api.v1.messages import router as messages_router
 from app.api.v1.models import router as models_router
+from app.api.v1.operator_plans import router as operator_plans_router
 from app.api.v1.provider_connections import router as provider_connections_router
 from app.api.v1.providers import router as providers_router
 from app.api.v1.runtime import router as runtime_router
@@ -62,6 +63,7 @@ app.include_router(models_router, prefix=f"{settings.API_V1_PREFIX}/models", tag
 app.include_router(workspaces_router, prefix=f"{settings.API_V1_PREFIX}/workspaces", tags=["workspaces"])
 app.include_router(conversations_router, prefix=f"{settings.API_V1_PREFIX}/conversations", tags=["conversations"])
 app.include_router(messages_router, prefix=f"{settings.API_V1_PREFIX}/messages", tags=["messages"])
+app.include_router(operator_plans_router, prefix=settings.API_V1_PREFIX, tags=["operator-plans"])
 app.include_router(knowledge_router, prefix=f"{settings.API_V1_PREFIX}/knowledge", tags=["knowledge"])
 app.include_router(knowledge_packs_router, prefix=settings.API_V1_PREFIX, tags=["knowledge-packs"])
 app.include_router(skill_packs_router, prefix=settings.API_V1_PREFIX, tags=["skill-packs"])

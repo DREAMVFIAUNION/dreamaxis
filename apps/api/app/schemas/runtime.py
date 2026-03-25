@@ -165,6 +165,8 @@ class RuntimeExecutionOut(TimestampedModel):
     execution_bundle_id: str | None = None
     parent_execution_id: str | None = None
     child_execution_ids: list[str] | None = None
+    operator_plan_id: str | None = None
+    operator_stage: str | None = None
     mode: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None

@@ -26,6 +26,7 @@ from app.services.desktop_operator import (
 )
 from app.services.knowledge_service import RetrievedKnowledge, retrieve_relevant_chunks
 from app.services.llm_provider import OpenAICompatibleProviderAdapter, ProviderConfigurationError
+from app.services.operator_plans import sync_operator_plan_from_trace
 from app.services.repo_copilot import (
     build_repo_copilot_fallback_response,
     build_repo_copilot_response_prompt,
@@ -105,6 +106,13 @@ def build_trace_response_metadata(trace: dict | None) -> dict:
         "desktop_action_approval": trace.get("desktop_action_approval"),
         "requested_desktop_actions": trace.get("requested_desktop_actions") or [],
         "workflow_stage": trace.get("workflow_stage"),
+        "operator_plan_id": trace.get("operator_plan_id"),
+        "operator_plan_status": trace.get("operator_plan_status"),
+        "operator_stage": trace.get("operator_stage"),
+        "active_step_id": trace.get("active_step_id"),
+        "pending_approval_count": trace.get("pending_approval_count"),
+        "latest_artifact_summaries": trace.get("latest_artifact_summaries") or trace.get("artifact_summaries") or [],
+        "step_verification_summary": trace.get("step_verification_summary"),
         "workspace_readiness": trace.get("workspace_readiness"),
         "recommended_next_actions": trace.get("recommended_next_actions") or [],
     }
@@ -191,6 +199,15 @@ async def create_message(
                 mode=payload.mode,
                 knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
             )
+            _, trace = await sync_operator_plan_from_trace(
+                session,
+                workspace_id=workspace.id,
+                created_by_id=user.id,
+                requested_prompt=payload.content,
+                trace=trace,
+                parent_execution_id=execution.id,
+                conversation_id=conversation.id,
+            )
             additional_system_prompt = build_desktop_operator_response_prompt(trace)
         else:
             trace = await collect_repo_copilot_trace(
@@ -266,6 +283,16 @@ async def create_message(
                 knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
             )
         )
+        if route_desktop and isinstance(trace, dict):
+            _, trace = await sync_operator_plan_from_trace(
+                session,
+                workspace_id=workspace.id,
+                created_by_id=user.id,
+                requested_prompt=payload.content,
+                trace=trace,
+                parent_execution_id=execution.id,
+                conversation_id=conversation.id,
+            )
         fallback_content = (
             build_desktop_trace_fallback_content(trace, exc)
             if route_desktop
@@ -362,6 +389,15 @@ async def stream_message(
                     prompt=payload.content,
                     mode=payload.mode,
                     knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
+                )
+                _, trace = await sync_operator_plan_from_trace(
+                    session,
+                    workspace_id=workspace.id,
+                    created_by_id=user.id,
+                    requested_prompt=payload.content,
+                    trace=trace,
+                    parent_execution_id=execution.id,
+                    conversation_id=conversation.id,
                 )
                 additional_system_prompt = build_desktop_operator_response_prompt(trace)
             else:
@@ -474,6 +510,16 @@ async def stream_message(
                     knowledge_sources=retrieved_knowledge.sources if retrieved_knowledge else None,
                 )
             )
+            if route_desktop and isinstance(trace, dict):
+                _, trace = await sync_operator_plan_from_trace(
+                    session,
+                    workspace_id=workspace.id,
+                    created_by_id=user.id,
+                    requested_prompt=payload.content,
+                    trace=trace,
+                    parent_execution_id=execution.id,
+                    conversation_id=conversation.id,
+                )
             fallback_content = (
                 build_desktop_trace_fallback_content(trace, exc)
                 if route_desktop

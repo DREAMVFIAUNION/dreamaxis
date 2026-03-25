@@ -372,6 +372,13 @@ export interface ChatExecutionTrace {
   reflection_reason?: string | null;
   reflection_next_probe?: string | null;
   workflow_stage?: "grounding" | "approval" | "execution" | "reflection" | "complete" | string;
+  operator_plan_id?: ID | null;
+  operator_plan_status?: string | null;
+  operator_stage?: string | null;
+  active_step_id?: string | null;
+  pending_approval_count?: number | null;
+  latest_artifact_summaries?: Array<Record<string, unknown>>;
+  step_verification_summary?: string | null;
   primary_failure_target?: string | null;
   failure_summary?: string | null;
   failure_classification?: string | null;
@@ -701,6 +708,8 @@ export interface RuntimeExecution {
   execution_bundle_id?: ID | null;
   parent_execution_id?: ID | null;
   child_execution_ids?: ID[];
+  operator_plan_id?: ID | null;
+  operator_stage?: string | null;
   mode?: ChatMode | null;
   started_at?: string | null;
   completed_at?: string | null;
@@ -718,6 +727,46 @@ export interface DesktopApprovalReviewResult {
   execution: RuntimeExecution;
   child_execution?: RuntimeExecution | null;
   execution_trace?: ChatExecutionTrace | null;
+}
+
+export interface OperatorPlanTemplate {
+  slug: string;
+  title: string;
+  description: string;
+  mode: ChatMode;
+  prompt: string;
+  tags: string[];
+}
+
+export interface OperatorPlan {
+  id: ID;
+  workspace_id: ID;
+  conversation_id?: ID | null;
+  parent_execution_id?: ID | null;
+  created_by_id: ID;
+  title: string;
+  mode: ChatMode | string;
+  status: string;
+  operator_stage: string;
+  requested_prompt: string;
+  template_slug?: string | null;
+  primary_target_label?: string | null;
+  primary_target_value?: string | null;
+  pending_approval_count: number;
+  summary_json?: Record<string, unknown> | null;
+  steps_json?: Array<Record<string, unknown>> | null;
+  approvals_json?: Array<Record<string, unknown>> | null;
+  artifacts_json?: Array<Record<string, unknown>> | null;
+  child_execution_ids_json?: ID[] | null;
+  trace_json?: ChatExecutionTrace | Record<string, unknown> | null;
+  last_failure_summary?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperatorPlanListResponse {
+  items: OperatorPlan[];
+  templates: OperatorPlanTemplate[];
 }
 
 export interface ModelUsage {

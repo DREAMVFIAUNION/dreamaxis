@@ -34,6 +34,7 @@ from app.schemas.runtime import (
     RuntimeSessionOut,
 )
 from app.services.desktop_operator import review_desktop_action_approval
+from app.services.operator_plans import get_operator_plan_by_parent_execution, sync_operator_plan_from_trace
 from app.services.execution_annotations import derive_execution_timeline, summarize_execution_timeline, timeline_from_events
 from app.services.runtime_dispatcher import (
     close_cli_session,
@@ -79,6 +80,8 @@ def serialize_runtime_execution(execution: RuntimeExecution) -> dict:
         payload["execution_bundle_id"] = details.get("execution_bundle_id")
         payload["parent_execution_id"] = details.get("parent_execution_id")
         payload["child_execution_ids"] = details.get("child_execution_ids")
+        payload["operator_plan_id"] = details.get("operator_plan_id")
+        payload["operator_stage"] = details.get("operator_stage")
         payload["mode"] = details.get("mode")
     return payload
 
@@ -317,6 +320,37 @@ async def review_runtime_execution_desktop_approval(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    operator_plan = await get_operator_plan_by_parent_execution(
+        session,
+        parent_execution_id=parent_execution.id,
+        user_id=user.id,
+    )
+    if operator_plan is not None:
+        operator_plan, trace = await sync_operator_plan_from_trace(
+            session,
+            workspace_id=operator_plan.workspace_id,
+            created_by_id=user.id,
+            requested_prompt=operator_plan.requested_prompt,
+            trace=trace,
+            parent_execution_id=parent_execution.id,
+            conversation_id=operator_plan.conversation_id,
+            operator_plan_id=operator_plan.id,
+            template_slug=operator_plan.template_slug,
+            title_override=operator_plan.title,
+        )
+        parent_execution.details_json = {
+            **(parent_execution.details_json or {}),
+            "operator_plan_id": operator_plan.id,
+            "operator_stage": trace.get("operator_stage"),
+            "execution_trace": trace,
+            "trace_summary": trace.get("trace_summary"),
+            "child_execution_ids": trace.get("child_execution_ids") or [],
+        }
+        await session.commit()
+        await session.refresh(parent_execution)
+        if child_execution:
+            await session.refresh(child_execution)
 
     return success_response(
         DesktopApprovalReviewResult(
