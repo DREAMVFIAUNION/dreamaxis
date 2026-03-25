@@ -6,6 +6,7 @@ import type { ChatExecutionTrace, ChatMode, Conversation, DiscoveredModel, Knowl
 import { AnimatePresence, motion } from "framer-motion";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelCard } from "@/components/cards/panel-card";
+import { ApprovalBanner } from "@/components/chat/approval-banner";
 import { ChatComposer, type ChatModeSelection } from "@/components/chat/chat-composer";
 import { ChatExecutionBundle } from "@/components/chat/chat-execution-bundle";
 import { StreamMessage } from "@/components/chat/stream-message";
@@ -114,6 +115,33 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const currentMode = selectedTrace?.mode_summary?.active_mode ?? (chatMode === "auto" ? undefined : chatMode);
   const selectedConnection = connections.find((item) => item.id === selectedConnectionId) ?? null;
   const approvalState = selectedTrace?.desktop_action_approval?.status ?? "not_required";
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token || !conversationId) return;
+    const interval = setInterval(() => {
+      void apiClient
+        .getRuntimeExecutions(token, { conversation_id: conversationId })
+        .then((res) => {
+          setRuntime(res.data);
+          const latestChat = res.data.find((item) => item.execution_kind === "chat") ?? null;
+          const runtimeTrace = traceFromRuntimeExecution(latestChat);
+          if (runtimeTrace) {
+            setLastTrace((current) => {
+              if (!current) return runtimeTrace;
+              const currentBundle = current.execution_bundle_id ?? current.operator_plan_id ?? "";
+              const nextBundle = runtimeTrace.execution_bundle_id ?? runtimeTrace.operator_plan_id ?? "";
+              if (pending && currentBundle && nextBundle && currentBundle !== nextBundle) return current;
+              return runtimeTrace;
+            });
+          }
+        })
+        .catch(() => {
+          // best-effort polling only
+        });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [conversationId, pending]);
 
   async function handleDesktopApproval(executionId: string, decision: "approved" | "denied", operatorPlanId?: string | null) {
     const token = getAuthToken();
@@ -226,6 +254,53 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
               </div>
             </div>
           </header>
+
+          <ApprovalBanner
+            approval={selectedTrace?.desktop_action_approval}
+            actions={selectedTrace?.requested_desktop_actions}
+            operatorPlanId={selectedTrace?.operator_plan_id}
+            pending={approvalPendingExecutionId === (latestChatRuntime?.id ?? null)}
+            onReview={
+              latestChatRuntime?.id
+                ? (decision) => handleDesktopApproval(latestChatRuntime.id, decision, selectedTrace?.operator_plan_id)
+                : null
+            }
+          />
+
+          {selectedTrace ? (
+            <motion.div
+              layout
+              {...operatorStageMotion}
+              className="operator-live-rail sticky top-[16rem] z-10 grid gap-3 border border-white/5 bg-black/85 px-4 py-4 backdrop-blur md:grid-cols-5"
+            >
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Current stage</p>
+                <p className="mt-2 text-sm font-semibold text-ink">{(selectedTrace.workflow_stage ?? "complete").replaceAll("_", " ")}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Active step</p>
+                <p className="mt-2 text-sm font-semibold text-ink">
+                  {selectedTrace.steps.find((step) => (step.runtime_execution_id ?? step.title) === selectedTrace.active_step_id)?.title ??
+                    selectedTrace.steps.find((step) => String(step.status ?? "").toLowerCase() !== "succeeded")?.title ??
+                    "No active step"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Child executions</p>
+                <p className="mt-2 text-sm font-semibold text-ink">{selectedTrace.steps.length}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Artifacts</p>
+                <p className="mt-2 text-sm font-semibold text-ink">{selectedTrace.desktop_artifacts?.length ?? selectedTrace.artifact_summaries?.length ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-signal">Pending approvals</p>
+                <p className={`mt-2 text-sm font-semibold ${selectedTrace.pending_approval_count ? "text-amber-100" : "text-ink"}`}>
+                  {selectedTrace.pending_approval_count ?? 0}
+                </p>
+              </div>
+            </motion.div>
+          ) : null}
 
           <div className="flex flex-col gap-4">
             <AnimatePresence initial={false}>

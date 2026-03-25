@@ -58,6 +58,25 @@ function normalizeSessionEvents(events: RuntimeSessionEvent[]): ExecutionAnnotat
   });
 }
 
+function statusTone(value?: string | null) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (!normalized) return "border-white/10 bg-white/5 text-mutedInk";
+  if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("blocked")) {
+    return "border-red-400/30 bg-red-500/10 text-red-200";
+  }
+  if (normalized.includes("approval") || normalized.includes("running") || normalized.includes("pending") || normalized.includes("warn")) {
+    return "border-amber-300/30 bg-amber-500/10 text-amber-100";
+  }
+  return "border-emerald-400/30 bg-emerald-500/10 text-emerald-200";
+}
+
+function getExecutionTrace(execution: RuntimeExecution | null): Record<string, unknown> | null {
+  if (!execution?.details_json || typeof execution.details_json !== "object") return null;
+  const trace = (execution.details_json as Record<string, unknown>).execution_trace;
+  if (!trace || typeof trace !== "object") return null;
+  return trace as Record<string, unknown>;
+}
+
 export function RuntimeScreen() {
   const searchParams = useSearchParams();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -157,14 +176,46 @@ export function RuntimeScreen() {
   const selectedRuntime = selectedExecution?.runtime_id ? runtimes.find((item) => item.id === selectedExecution.runtime_id) ?? null : null;
   const normalizedSessionTimeline = useMemo(() => normalizeSessionEvents(sessionEvents), [sessionEvents]);
   const selectedArtifacts = useMemo(() => toArtifactList(selectedExecution?.artifacts_json), [selectedExecution?.artifacts_json]);
+  const selectedTrace = useMemo(() => getExecutionTrace(selectedExecution), [selectedExecution]);
+  const traceSteps = useMemo(() => {
+    if (!selectedTrace) return [] as Array<Record<string, unknown>>;
+    const steps = selectedTrace.steps;
+    return Array.isArray(steps) ? (steps.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>) : [];
+  }, [selectedTrace]);
+  const traceTimeline = useMemo(() => {
+    if (!selectedTrace) return [] as Array<Record<string, unknown>>;
+    const timeline = selectedTrace.timeline;
+    return Array.isArray(timeline)
+      ? (timeline.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>)
+      : [];
+  }, [selectedTrace]);
+  const traceArtifacts = useMemo(() => {
+    if (!selectedTrace) return [] as Array<Record<string, unknown>>;
+    return toArtifactList(selectedTrace.artifact_summaries ?? selectedTrace.desktop_artifacts);
+  }, [selectedTrace]);
+  const allArtifacts = useMemo(() => (traceArtifacts.length ? traceArtifacts : selectedArtifacts), [traceArtifacts, selectedArtifacts]);
+  const childExecutions = useMemo(
+    () =>
+      selectedExecution?.child_execution_ids
+        ?.map((childId) => executions.find((item) => item.id === childId))
+        .filter((item): item is RuntimeExecution => Boolean(item)) ?? [],
+    [selectedExecution?.child_execution_ids, executions],
+  );
+  const approvalHistory = useMemo(() => {
+    if (!selectedTrace) return [] as Array<Record<string, unknown>>;
+    const explicitHistory = selectedTrace.approval_history;
+    if (Array.isArray(explicitHistory)) {
+      return explicitHistory.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+    }
+    const approval = selectedTrace.desktop_action_approval;
+    if (approval && typeof approval === "object") return [approval as Record<string, unknown>];
+    return [] as Array<Record<string, unknown>>;
+  }, [selectedTrace]);
   const selectedApproval = useMemo(() => {
-    const details = selectedExecution?.details_json;
-    if (!details || typeof details !== "object") return null;
-    const trace = (details as Record<string, unknown>).execution_trace;
-    if (!trace || typeof trace !== "object") return null;
-    const approval = (trace as Record<string, unknown>).desktop_action_approval;
+    if (!selectedTrace) return null;
+    const approval = selectedTrace.desktop_action_approval;
     return approval && typeof approval === "object" ? (approval as Record<string, unknown>) : null;
-  }, [selectedExecution?.details_json]);
+  }, [selectedTrace]);
   const operatorPlanId = selectedExecution?.operator_plan_id;
 
   return (
@@ -330,10 +381,11 @@ export function RuntimeScreen() {
                     <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Execution summary</p>
                     <p className="mt-2 text-lg font-semibold text-ink">{selectedExecution.trace_summary?.headline ?? selectedExecution.status}</p>
                     <p className="mt-2 leading-7">{selectedExecution.trace_summary?.summary ?? selectedExecution.response_preview ?? selectedExecution.error_message ?? "No summary available."}</p>
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                       <p>Kind: {selectedExecution.execution_kind}</p>
                       <p>Mode: {selectedExecution.mode ?? "--"}</p>
                       <p>Status: {selectedExecution.status}</p>
+                      <p>Stage: {selectedExecution.operator_stage?.replaceAll("_", " ") ?? "--"}</p>
                       <p>Runtime: {selectedExecution.runtime_name ?? selectedExecution.runtime_id ?? "--"}</p>
                       <p>Session: {selectedExecution.runtime_session_id ?? "--"}</p>
                       <p>Connection: {selectedExecution.provider_connection_name ?? "--"}</p>
@@ -344,23 +396,36 @@ export function RuntimeScreen() {
                       <p>Created: {fmtDate(selectedExecution.created_at)}</p>
                       <p>Completed: {fmtDate(selectedExecution.completed_at)}</p>
                     </div>
-                    {selectedExecution.child_execution_ids?.length ? (
-                      <div className="mt-3 border-t border-white/5 pt-3 text-xs text-mutedInk">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Child executions</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {selectedExecution.child_execution_ids.map((childId) => (
-                            <button
-                              key={childId}
-                              type="button"
-                              onClick={() => setSelectedExecutionId(childId)}
-                              className="border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-ink transition hover:border-signal/30"
-                            >
-                              {childId}
-                            </button>
-                          ))}
+                    <div className="mt-3 border-t border-white/5 pt-3 text-xs text-mutedInk">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Lineage</p>
+                      <div className="mt-2 grid gap-3 md:grid-cols-2">
+                        <div className="border border-white/10 bg-black/30 px-3 py-3">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Parent execution</p>
+                          <p className="mt-2 break-all text-ink">{selectedExecution.parent_execution_id ?? "Root execution"}</p>
+                        </div>
+                        <div className="border border-white/10 bg-black/30 px-3 py-3">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Operator plan</p>
+                          <p className="mt-2 break-all text-ink">{operatorPlanId ?? "--"}</p>
                         </div>
                       </div>
-                    ) : null}
+                      {childExecutions.length ? (
+                        <div className="mt-3">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">Child executions</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {childExecutions.map((childExecution) => (
+                              <button
+                                key={childExecution.id}
+                                type="button"
+                                onClick={() => setSelectedExecutionId(childExecution.id)}
+                                className={`border px-3 py-2 text-[11px] text-ink transition hover:border-signal/30 ${statusTone(childExecution.status)}`}
+                              >
+                                {childExecution.execution_kind} / {childExecution.status}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                     {selectedExecution.conversation_id ? (
                       <div className="mt-3 border-t border-white/5 pt-3 text-xs text-mutedInk">
                         <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Origin</p>
@@ -379,94 +444,14 @@ export function RuntimeScreen() {
                     ) : null}
                   </div>
 
-                  <div className="border border-white/5 bg-black/25 px-4 py-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Execution timeline</p>
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">
-                        {timelineLoading ? "loading" : `${executionTimeline.length} events`}
-                      </span>
-                    </div>
-                    <div className="mt-3">
-                      <ExecutionTimeline
-                        items={executionTimeline}
-                        emptyCopy={
-                          selectedExecution.status === "failed"
-                            ? "This execution failed before a full timeline could be captured. Check the summary and session events below."
-                            : "No structured timeline was captured for this execution."
-                        }
-                        resolveArtifacts={(item) =>
-                          item.runtime_execution_id === selectedExecution.id && Array.isArray(selectedExecution.artifacts_json)
-                            ? (selectedExecution.artifacts_json as Array<Record<string, unknown>>)
-                            : []
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="border border-white/5 bg-black/25 px-4 py-4">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Execution payload</p>
-                    <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-7 text-ink">
-                      {trimBlock(selectedExecution.command_preview ?? selectedExecution.prompt_preview)}
-                    </pre>
-                    {selectedExecution.error_message && !executionTimeline.length ? (
-                      <div className="mt-3 border border-red-400/20 bg-red-500/10 px-3 py-3 text-red-200">
-                        Failed with limited details: {selectedExecution.error_message}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {selectedApproval ? (
-                    <div className="border border-amber-300/20 bg-amber-500/5 px-4 py-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Approval state</p>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
-                          {String(selectedApproval.status ?? "pending").replaceAll("_", " ")}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm leading-7 text-ink">{String(selectedApproval.summary ?? "Desktop approval metadata captured.")}</p>
-                      {Array.isArray(selectedApproval.requested_actions) && selectedApproval.requested_actions.length ? (
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
-                          {(selectedApproval.requested_actions as Array<Record<string, unknown>>).map((action, index) => (
-                            <div key={`${String(action.id ?? index)}`} className="border border-white/10 bg-black/20 px-3 py-3">
-                              <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
-                                {String(action.action ?? "desktop_action").replaceAll("_", " ")}
-                              </p>
-                              <p className="mt-2 text-sm text-ink">{String(action.title ?? "Desktop action")}</p>
-                              <p className="mt-2 text-xs leading-6 text-mutedInk">
-                                {String(action.target_window ?? action.target_app ?? action.target_label ?? "desktop")}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {selectedExecution.operator_stage ? (
-                    <div className="border border-white/5 bg-black/25 px-4 py-4">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Operator stage</p>
-                      <p className="mt-2 text-sm text-ink">{selectedExecution.operator_stage.replaceAll("_", " ")}</p>
-                    </div>
-                  ) : null}
-
-                  <div className="border border-white/5 bg-black/25 px-4 py-4">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Session event stream</p>
-                    <div className="mt-3">
-                      <ExecutionTimeline
-                        items={normalizedSessionTimeline}
-                        emptyCopy="No session-level events were recorded for this execution."
-                      />
-                    </div>
-                  </div>
-
-                  {selectedArtifacts.length ? (
+                  {allArtifacts.length ? (
                     <div className="border border-white/5 bg-black/25 px-4 py-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Artifacts</p>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{selectedArtifacts.length} captured</span>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Artifact carousel</p>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">{allArtifacts.length} captured</span>
                       </div>
                       <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
-                        {selectedArtifacts.map((artifact, index) => {
+                        {allArtifacts.map((artifact, index) => {
                           const dataUrl = typeof artifact.data_url === "string" ? artifact.data_url : null;
                           const name = typeof artifact.name === "string" ? artifact.name : `artifact-${index + 1}`;
                           return dataUrl ? (
@@ -487,9 +472,176 @@ export function RuntimeScreen() {
                     </div>
                   ) : null}
 
-                  {selectedExecution.execution_kind.includes("browser") && !selectedArtifacts.length ? (
+                  <div className="border border-white/5 bg-black/25 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Action timeline</p>
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                        {timelineLoading ? "loading" : `${traceSteps.length || executionTimeline.length} grouped events`}
+                      </span>
+                    </div>
+                    {traceSteps.length ? (
+                      <div className="mt-3 space-y-3">
+                        {traceSteps.map((step, index) => {
+                          const stepStatus = String(step.status ?? "pending");
+                          const stepRuntimeId = typeof step.runtime_execution_id === "string" ? step.runtime_execution_id : null;
+                          const stepArtifacts = toArtifactList(step.artifact_summaries);
+                          return (
+                            <details
+                              key={`${String(step.title ?? "step")}-${index}`}
+                              className="border border-white/10 bg-black/30 px-3 py-3"
+                              open={stepStatus !== "succeeded"}
+                            >
+                              <summary className="cursor-pointer list-none">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-ink">{String(step.title ?? `Step ${index + 1}`)}</p>
+                                    <p className="mt-1 text-xs text-mutedInk">{String(step.summary ?? "No summary")}</p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${statusTone(stepStatus)}`}>{stepStatus}</span>
+                                    {stepRuntimeId ? (
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          setSelectedExecutionId(stepRuntimeId);
+                                        }}
+                                        className="border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100"
+                                      >
+                                        Open child
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </summary>
+                              <div className="mt-3 border-t border-white/10 pt-3">
+                                <p className="text-xs leading-6 text-ink">{String(step.output_excerpt ?? "No output excerpt")}</p>
+                                {stepArtifacts.length ? (
+                                  <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-mutedInk">
+                                    {stepArtifacts.length} artifact(s) attached
+                                  </p>
+                                ) : null}
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <ExecutionTimeline
+                          items={executionTimeline}
+                          emptyCopy={
+                            selectedExecution.status === "failed"
+                              ? "This execution failed before a full timeline could be captured. Check summary and session history."
+                              : "No structured timeline was captured for this execution."
+                          }
+                          resolveArtifacts={(item) =>
+                            item.runtime_execution_id === selectedExecution.id && Array.isArray(selectedExecution.artifacts_json)
+                              ? (selectedExecution.artifacts_json as Array<Record<string, unknown>>)
+                              : []
+                          }
+                        />
+                      </div>
+                    )}
+                    {traceTimeline.length ? (
+                      <details className="mt-3 border border-white/10 bg-black/20 px-3 py-2">
+                        <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                          Expanded trace timeline ({traceTimeline.length})
+                        </summary>
+                        <pre className="mt-3 whitespace-pre-wrap font-sans text-xs leading-6 text-ink">
+                          {JSON.stringify(traceTimeline, null, 2)}
+                        </pre>
+                      </details>
+                    ) : null}
+                  </div>
+
+                  {approvalHistory.length ? (
+                    <div className="border border-amber-300/20 bg-amber-500/5 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Approval history</p>
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-amber-100">{approvalHistory.length} event(s)</span>
+                      </div>
+                      <div className="mt-3 space-y-3">
+                        {approvalHistory.map((approvalItem, historyIndex) => {
+                          const itemStatus = String(approvalItem.status ?? "pending");
+                          const requestedActions = Array.isArray(approvalItem.requested_actions)
+                            ? (approvalItem.requested_actions as Array<Record<string, unknown>>)
+                            : [];
+                          return (
+                            <div key={`${itemStatus}-${historyIndex}`} className="border border-white/10 bg-black/20 px-3 py-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${statusTone(itemStatus)}`}>
+                                  {itemStatus.replaceAll("_", " ")}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-[0.18em] text-mutedInk">
+                                  {String(approvalItem.reviewed_at ?? approvalItem.updated_at ?? selectedExecution.updated_at ?? "--")}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm leading-7 text-ink">
+                                {String(approvalItem.summary ?? "Desktop approval metadata captured.")}
+                              </p>
+                              {requestedActions.length ? (
+                                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                  {requestedActions.map((action, actionIndex) => (
+                                    <div key={`${String(action.id ?? actionIndex)}`} className="border border-white/10 bg-black/30 px-3 py-2">
+                                      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                                        {String(action.action ?? "desktop_action").replaceAll("_", " ")}
+                                      </p>
+                                      <p className="mt-1 text-xs leading-6 text-mutedInk">
+                                        {String(action.target_window ?? action.target_app ?? action.target_label ?? "desktop")}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : selectedApproval ? (
+                    <div className="border border-amber-300/20 bg-amber-500/5 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Approval state</p>
+                        <span className={`border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${statusTone(String(selectedApproval.status ?? "pending"))}`}>
+                          {String(selectedApproval.status ?? "pending").replaceAll("_", " ")}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-7 text-ink">{String(selectedApproval.summary ?? "Desktop approval metadata captured.")}</p>
+                    </div>
+                  ) : null}
+
+                  <div className="border border-white/5 bg-black/25 px-4 py-4">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-signal">Session event stream</p>
+                    <div className="mt-3">
+                      <ExecutionTimeline
+                        items={normalizedSessionTimeline}
+                        emptyCopy="No session-level events were recorded for this execution."
+                      />
+                    </div>
+                  </div>
+
+                  <details className="border border-white/5 bg-black/25 px-4 py-4">
+                    <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-signal">Raw payload (compressed by default)</summary>
+                    <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-7 text-ink">
+                      {trimBlock(selectedExecution.command_preview ?? selectedExecution.prompt_preview)}
+                    </pre>
+                    <details className="mt-3 border border-white/10 bg-black/20 px-3 py-2">
+                      <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">Details JSON</summary>
+                      <pre className="mt-3 whitespace-pre-wrap font-sans text-xs leading-6 text-ink">
+                        {JSON.stringify(selectedExecution.details_json ?? {}, null, 2)}
+                      </pre>
+                    </details>
+                    {selectedExecution.error_message && !executionTimeline.length ? (
+                      <div className="mt-3 border border-red-400/20 bg-red-500/10 px-3 py-3 text-red-200">
+                        Failed with limited details: {selectedExecution.error_message}
+                      </div>
+                    ) : null}
+                  </details>
+
+                  {selectedExecution.execution_kind.includes("browser") && !allArtifacts.length ? (
                     <div className="border border-dashed border-white/10 bg-black/20 px-4 py-5 text-sm text-mutedInk">
-                      Browser execution finished without a retrievable artifact. The timeline and session event stream still preserve the URL and action summary.
+                      Browser execution finished without a retrievable artifact. Timeline and session event stream still preserve URL and action summary.
                     </div>
                   ) : null}
 

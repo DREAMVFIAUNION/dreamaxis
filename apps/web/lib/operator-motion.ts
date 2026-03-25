@@ -45,3 +45,13 @@ export const operatorArtifactMotion = {
   },
 };
 
+export const operatorPinnedRailMotion = {
+  initial: { opacity: 0, x: -8 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -8 },
+  transition: {
+    duration: operatorMotion.duration.fast,
+    ease: operatorMotion.ease,
+  },
+};
+

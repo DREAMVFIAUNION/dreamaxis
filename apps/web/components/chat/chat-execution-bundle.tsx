@@ -4,7 +4,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ChatExecutionTrace, ChatEvidenceItem, DesktopExecutionArtifact, RuntimeExecution } from "@dreamaxis/client";
 import { AnimatePresence, motion } from "framer-motion";
-import { operatorCardMotion, operatorMotion, operatorStageMotion } from "@/lib/operator-motion";
+import { operatorCardMotion, operatorMotion, operatorPinnedRailMotion, operatorStageMotion } from "@/lib/operator-motion";
+import { ActiveStepPin } from "@/components/chat/active-step-pin";
 
 const FAILURE_TYPE_LABELS: Record<string, string> = {
   dependency_or_install: "Dependency / install",
@@ -258,6 +259,11 @@ export function ChatExecutionBundle({
               <p className="mt-2 text-sm leading-7 text-ink">{stepVerificationSummary ?? activeStep?.output_excerpt ?? "No step verification summary yet."}</p>
             </div>
           </div>
+          {(trace.steps ?? []).length ? (
+            <motion.div layout {...operatorPinnedRailMotion} className="mt-3">
+              <ActiveStepPin steps={trace.steps ?? []} activeStepId={activeStepId} />
+            </motion.div>
+          ) : null}
         </SectionCard>
       ) : null}
 
@@ -425,7 +431,7 @@ export function ChatExecutionBundle({
                     <StepMeta label="Runtime" value={step.runtime_execution_id ?? "--"} />
                   </div>
                   {step.output_excerpt ? (
-                    <details className="mt-3 border border-white/5 bg-black/20 px-3 py-2" open={step.status !== "succeeded"}>
+                    <details className="mt-3 border border-white/5 bg-black/20 px-3 py-2" open={step.status !== "succeeded" || Boolean(artifacts.length)}>
                       <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-mutedInk">output excerpt</summary>
                       <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-6 text-ink">{step.output_excerpt}</pre>
                     </details>
