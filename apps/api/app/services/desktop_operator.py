@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.schemas.message import ChatMode, KnowledgeChunkReference
 from app.services.execution_annotations import build_annotation
+from app.services.desktop_grounding import build_grounding_signals, grounded_target_from_result, resolve_desktop_target
 from app.services.runtime_dispatcher import dispatch_desktop_execution
 from app.services.runtime_registry import list_runtimes_for_workspace
 from app.services.runtime_service import (
@@ -893,60 +894,14 @@ async def collect_desktop_operator_trace(
     runtimes = await list_runtimes_for_workspace(session, workspace.id)
     desktop_runtimes = [runtime for runtime in runtimes if runtime.runtime_type == "desktop"]
     target = detect_desktop_target(prompt)
-    target_value = target.get("window") or target.get("app") or "Desktop"
-    signals = [
-        {
-            "id": "desktop-workspace-root",
-            "kind": "workspace_root",
-            "label": "Workspace root",
-            "value": str(workspace.workspace_root_path or "."),
-            "source_layer": "workspace",
-            "status": "ready",
-            "reason": "Desktop operator turns remain scoped to the active workspace and registered runtimes.",
-        },
-        {
-            "id": "desktop-target",
-            "kind": "desktop_target",
-            "label": "Prompt target",
-            "value": target_value,
-            "source_layer": "request",
-            "status": "observed",
-            "reason": "DreamAxis extracted the likely desktop surface from the user prompt.",
-        },
-    ]
-    if desktop_runtimes:
-        signals.append(
-            {
-                "id": "desktop-runtime-online",
-                "kind": "runtime_inventory",
-                "label": "Desktop runtime",
-                "value": ", ".join(runtime.name for runtime in desktop_runtimes),
-                "source_layer": "runtime",
-                "status": "ready",
-                "reason": "A Windows desktop runtime is online for this workspace.",
-            }
-        )
-    else:
-        signals.append(
-            {
-                "id": "desktop-runtime-missing",
-                "kind": "runtime_inventory",
-                "label": "Desktop runtime",
-                "value": "offline",
-                "source_layer": "runtime",
-                "status": "warning",
-                "reason": "No desktop runtime is online, so DreamAxis can only prepare a grounded operator plan.",
-            }
-        )
-
-    primary_target = {
-        "type": "window" if target.get("window") else ("app" if target.get("app") else "desktop"),
-        "label": target.get("surface") or "desktop",
-        "value": target_value,
-        "reason": "Use this as the primary grounded desktop surface for the current turn.",
-        "source_signal_ids": [signal["id"] for signal in signals if signal["id"] in {"desktop-target", "desktop-runtime-online", "desktop-runtime-missing"}],
-        "status": "primary",
-    }
+    grounded_result = resolve_desktop_target(
+        prompt=prompt,
+        workspace_root=str(workspace.workspace_root_path or "."),
+        desktop_runtime_names=[runtime.name for runtime in desktop_runtimes],
+    )
+    target_value = grounded_result.target_identifier or grounded_result.context_snapshot.prompt_derived_target
+    signals = build_grounding_signals(grounded_result)
+    primary_target = grounded_target_from_result(grounded_result)
 
     requested_actions: list[dict[str, Any]] = []
     steps: list[dict[str, Any]] = []
