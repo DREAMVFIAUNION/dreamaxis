@@ -13,10 +13,10 @@ import { getAuthToken } from "@/lib/auth";
 import { operatorCardMotion } from "@/lib/operator-motion";
 
 type PlanView = "approval_queue" | "active_runs" | "all_plans" | "templates" | "recent_failures";
-type PlanStatusFilter = "all" | "queued" | "running" | "awaiting_approval" | "blocked" | "failed" | "succeeded";
+type PlanStatusFilter = "all" | "queued" | "running" | "awaiting_approval" | "pending_approval" | "blocked" | "failed" | "succeeded" | "completed";
 
 const DESKTOP_MODES: ChatMode[] = ["inspect_desktop", "verify_desktop", "operate_desktop"];
-const FILTERS: PlanStatusFilter[] = ["all", "queued", "running", "awaiting_approval", "blocked", "failed", "succeeded"];
+const FILTERS: PlanStatusFilter[] = ["all", "queued", "running", "awaiting_approval", "pending_approval", "blocked", "failed", "succeeded", "completed"];
 
 function toTrace(value: unknown): ChatExecutionTrace | null {
   if (!value || typeof value !== "object") return null;
@@ -106,8 +106,8 @@ export function OperatorScreen() {
   const selectedPlan = useMemo(() => plans.find((item) => item.id === selectedPlanId) ?? null, [plans, selectedPlanId]);
   const selectedTrace = useMemo(() => toTrace(selectedPlan?.trace_json), [selectedPlan?.trace_json]);
   const runtimeIndex = useMemo(() => new Map(runtime.map((item) => [item.id, item])), [runtime]);
-  const pendingApprovals = useMemo(() => plans.filter((item) => item.status === "awaiting_approval"), [plans]);
-  const activeRuns = useMemo(() => plans.filter((item) => ["running", "awaiting_approval"].includes(item.status)), [plans]);
+  const pendingApprovals = useMemo(() => plans.filter((item) => ["awaiting_approval", "pending_approval"].includes(item.status)), [plans]);
+  const activeRuns = useMemo(() => plans.filter((item) => ["running", "awaiting_approval", "pending_approval"].includes(item.status)), [plans]);
   const failedPlans = useMemo(() => plans.filter((item) => item.status === "failed"), [plans]);
   const filteredPlans = useMemo(() => (filter === "all" ? plans : plans.filter((item) => item.status === filter)), [plans, filter]);
 

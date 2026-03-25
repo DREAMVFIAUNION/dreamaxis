@@ -11,41 +11,21 @@ from app.core.db import get_db
 from app.core.responses import success_response
 from app.models.conversation import Conversation
 from app.models.operator_plan import OperatorPlan
-from app.models.runtime_execution import RuntimeExecution
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.schemas.operator_plan import OperatorPlanActionReview, OperatorPlanCreate, OperatorPlanOut
-from app.services.desktop_operator import collect_desktop_operator_trace, review_desktop_action_approval
 from app.services.operator_plans import (
     get_operator_plan_or_404,
     list_builtin_operator_templates,
     resolve_operator_plan_input,
-    sync_operator_plan_from_trace,
 )
-from app.services.runtime_service import create_runtime_execution, mark_runtime_failed, mark_runtime_running, mark_runtime_succeeded
+from app.services.operator_plan_executor import create_and_execute_operator_plan, resume_operator_plan_execution, review_operator_plan
 
 router = APIRouter()
 
 
 def _serialize_operator_plan(plan) -> dict[str, Any]:
     return OperatorPlanOut.model_validate(plan).model_dump()
-
-
-def _merge_execution_details(trace: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "mode": trace.get("mode"),
-        "operator_plan_id": trace.get("operator_plan_id"),
-        "operator_stage": trace.get("operator_stage"),
-        "execution_bundle_id": trace.get("execution_bundle_id"),
-        "child_execution_ids": trace.get("child_execution_ids") or [],
-        "trace_summary": trace.get("trace_summary"),
-        "execution_trace": trace,
-        "artifact_summaries": trace.get("artifact_summaries") or [],
-        "evidence_items": trace.get("evidence_items") or trace.get("evidence") or [],
-        "recommended_next_actions": trace.get("recommended_next_actions") or [],
-    }
-
-
 async def _get_workspace_or_404(session: AsyncSession, *, workspace_id: str, user_id: str) -> Workspace:
     workspace = await session.scalar(select(Workspace).where(Workspace.id == workspace_id, Workspace.owner_id == user_id))
     if not workspace:
@@ -111,60 +91,19 @@ async def create_operator_plan(
         template_slug=payload.template_slug,
         title=payload.title,
     )
-    parent_execution = await create_runtime_execution(
-        session,
-        workspace_id=workspace.id,
-        user_id=user.id,
-        source="chat",
-        execution_kind="chat",
-        provider_id=conversation.provider_id if conversation else None,
-        model_id=conversation.model_id if conversation else None,
-        provider_connection_id=conversation.provider_connection_id if conversation else None,
-        resolved_model_name=conversation.model_name if conversation else None,
-        resolved_base_url=conversation.provider_connection.base_url if conversation and conversation.provider_connection else None,
-        conversation_id=conversation.id if conversation else None,
-        prompt_preview=resolved_input["prompt"][:400] if resolved_input["prompt"] else None,
-        details_json={"requested_mode": resolved_input["mode"], "template_slug": resolved_input["template_slug"]},
-    )
-
-    trace: dict[str, Any] | None = None
     try:
-        await mark_runtime_running(session, parent_execution)
-        trace = await collect_desktop_operator_trace(
+        plan = await create_and_execute_operator_plan(
             session,
             workspace=workspace,
             user=user,
             conversation=conversation,
-            parent_execution=parent_execution,
+            title=resolved_input["title"] or "",
             prompt=resolved_input["prompt"] or "",
             mode=resolved_input["mode"],
-        )
-        plan, updated_trace = await sync_operator_plan_from_trace(
-            session,
-            workspace_id=workspace.id,
-            created_by_id=user.id,
-            requested_prompt=resolved_input["prompt"] or "",
-            trace=trace,
-            parent_execution_id=parent_execution.id,
-            conversation_id=conversation.id if conversation else None,
             template_slug=resolved_input["template_slug"],
-            title_override=resolved_input["title"],
-        )
-        await mark_runtime_succeeded(
-            session,
-            parent_execution,
-            response_preview=str((updated_trace.get("trace_summary") or {}).get("summary") or resolved_input["title"] or "Operator plan created")[:400],
-            details_json=_merge_execution_details(updated_trace),
-            artifacts_json=updated_trace.get("artifact_summaries"),
         )
         return success_response(_serialize_operator_plan(plan))
     except Exception as exc:
-        await mark_runtime_failed(
-            session,
-            parent_execution,
-            error_message=str(exc),
-            details_json=_merge_execution_details(trace or {"mode": resolved_input["mode"]}),
-        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
@@ -178,33 +117,19 @@ async def approve_operator_plan(
     if payload.decision != "approved":
         raise HTTPException(status_code=400, detail="Use the deny endpoint for denied actions.")
     plan = await get_operator_plan_or_404(session, operator_plan_id=operator_plan_id, user_id=user.id)
-    if not plan.parent_execution_id:
-        raise HTTPException(status_code=400, detail="Operator plan has no parent execution to approve.")
     workspace = await _get_workspace_or_404(session, workspace_id=plan.workspace_id, user_id=user.id)
-    parent_execution = await session.scalar(select(RuntimeExecution).where(RuntimeExecution.id == plan.parent_execution_id))
-    if not parent_execution:
-        raise HTTPException(status_code=404, detail="Parent runtime execution not found")
-    parent_execution, _, trace = await review_desktop_action_approval(
-        session,
-        workspace=workspace,
-        user=user,
-        parent_execution=parent_execution,
-        decision="approved",
-    )
-    updated_plan, updated_trace = await sync_operator_plan_from_trace(
-        session,
-        workspace_id=plan.workspace_id,
-        created_by_id=user.id,
-        requested_prompt=plan.requested_prompt,
-        trace=trace,
-        parent_execution_id=parent_execution.id,
-        conversation_id=plan.conversation_id,
-        operator_plan_id=plan.id,
-        template_slug=plan.template_slug,
-        title_override=plan.title,
-    )
-    parent_execution.details_json = _merge_execution_details(updated_trace)
-    await session.commit()
+    conversation = await _get_conversation_or_404(session, conversation_id=plan.conversation_id, workspace_id=workspace.id, user_id=user.id)
+    try:
+        updated_plan = await review_operator_plan(
+            session,
+            workspace=workspace,
+            user=user,
+            conversation=conversation,
+            plan=plan,
+            decision="approved",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return success_response(_serialize_operator_plan(updated_plan))
 
 
@@ -218,33 +143,19 @@ async def deny_operator_plan(
     if payload.decision != "denied":
         raise HTTPException(status_code=400, detail="Use the approve endpoint for approved actions.")
     plan = await get_operator_plan_or_404(session, operator_plan_id=operator_plan_id, user_id=user.id)
-    if not plan.parent_execution_id:
-        raise HTTPException(status_code=400, detail="Operator plan has no parent execution to deny.")
     workspace = await _get_workspace_or_404(session, workspace_id=plan.workspace_id, user_id=user.id)
-    parent_execution = await session.scalar(select(RuntimeExecution).where(RuntimeExecution.id == plan.parent_execution_id))
-    if not parent_execution:
-        raise HTTPException(status_code=404, detail="Parent runtime execution not found")
-    parent_execution, _, trace = await review_desktop_action_approval(
-        session,
-        workspace=workspace,
-        user=user,
-        parent_execution=parent_execution,
-        decision="denied",
-    )
-    updated_plan, updated_trace = await sync_operator_plan_from_trace(
-        session,
-        workspace_id=plan.workspace_id,
-        created_by_id=user.id,
-        requested_prompt=plan.requested_prompt,
-        trace=trace,
-        parent_execution_id=parent_execution.id,
-        conversation_id=plan.conversation_id,
-        operator_plan_id=plan.id,
-        template_slug=plan.template_slug,
-        title_override=plan.title,
-    )
-    parent_execution.details_json = _merge_execution_details(updated_trace)
-    await session.commit()
+    conversation = await _get_conversation_or_404(session, conversation_id=plan.conversation_id, workspace_id=workspace.id, user_id=user.id)
+    try:
+        updated_plan = await review_operator_plan(
+            session,
+            workspace=workspace,
+            user=user,
+            conversation=conversation,
+            plan=plan,
+            decision="denied",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return success_response(_serialize_operator_plan(updated_plan))
 
 
@@ -262,58 +173,14 @@ async def resume_operator_plan(
         workspace_id=workspace.id,
         user_id=user.id,
     )
-    parent_execution = await create_runtime_execution(
-        session,
-        workspace_id=workspace.id,
-        user_id=user.id,
-        source="chat",
-        execution_kind="chat",
-        provider_id=conversation.provider_id if conversation else None,
-        model_id=conversation.model_id if conversation else None,
-        provider_connection_id=conversation.provider_connection_id if conversation else None,
-        resolved_model_name=conversation.model_name if conversation else None,
-        resolved_base_url=conversation.provider_connection.base_url if conversation and conversation.provider_connection else None,
-        conversation_id=conversation.id if conversation else None,
-        prompt_preview=plan.requested_prompt[:400],
-        details_json={"requested_mode": plan.mode, "template_slug": plan.template_slug, "resumed_operator_plan_id": plan.id},
-    )
-    trace: dict[str, Any] | None = None
     try:
-        await mark_runtime_running(session, parent_execution)
-        trace = await collect_desktop_operator_trace(
+        updated_plan = await resume_operator_plan_execution(
             session,
             workspace=workspace,
             user=user,
             conversation=conversation,
-            parent_execution=parent_execution,
-            prompt=plan.requested_prompt,
-            mode=plan.mode,
-        )
-        updated_plan, updated_trace = await sync_operator_plan_from_trace(
-            session,
-            workspace_id=plan.workspace_id,
-            created_by_id=user.id,
-            requested_prompt=plan.requested_prompt,
-            trace=trace,
-            parent_execution_id=parent_execution.id,
-            conversation_id=plan.conversation_id,
-            operator_plan_id=plan.id,
-            template_slug=plan.template_slug,
-            title_override=plan.title,
-        )
-        await mark_runtime_succeeded(
-            session,
-            parent_execution,
-            response_preview=str((updated_trace.get("trace_summary") or {}).get("summary") or plan.title)[:400],
-            details_json=_merge_execution_details(updated_trace),
-            artifacts_json=updated_trace.get("artifact_summaries"),
+            plan=plan,
         )
         return success_response(_serialize_operator_plan(updated_plan))
     except Exception as exc:
-        await mark_runtime_failed(
-            session,
-            parent_execution,
-            error_message=str(exc),
-            details_json=_merge_execution_details(trace or {"mode": plan.mode}),
-        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
