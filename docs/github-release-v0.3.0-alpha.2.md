@@ -1,26 +1,28 @@
 # DreamAxis v0.3.0-alpha.2
 
-DreamAxis `v0.3.0-alpha.2` turns the v0.3 operator direction into a validated product slice:
+DreamAxis `v0.3.0-alpha.2` is the first release where the product reads clearly as a **local-first operator workflow platform** instead of a generic chat shell.
 
-- **OperatorPlan-backed execution**
-- **approval-gated desktop operate flows**
-- **deterministic desktop grounding**
-- **chat / operator / runtime split by responsibility**
-- **proposal-only repo lane preserved**
+This release locks in the new public shape:
 
-This release keeps the trust model unchanged:
+- **OperatorPlan-backed execution** for multi-step work
+- **approval-gated desktop action lanes** with resume support
+- **runtime-backed audit** across chat, operator, and runtime
+- **proposal-only repo/code repair lanes**
+- **rich final outputs** for Markdown, code, math, and Mermaid
+
+The trust model remains unchanged:
 
 - **local-first**
 - **Windows-first**
-- **runtime-backed audit**
 - **gated actions**
+- **runtime-backed evidence**
 - **proposal-only for repo/code writes**
 
 ## Highlights
 
-### OperatorPlan workflow is now real
+### OperatorPlan is now the execution backbone
 
-Alpha.2 adds a stable operator workflow layer with:
+Alpha.2 introduces a first-class operator workflow object for multi-step work:
 
 - `POST /api/v1/operator-plans`
 - `GET /api/v1/operator-plans`
@@ -29,23 +31,24 @@ Alpha.2 adds a stable operator workflow layer with:
 - `POST /api/v1/operator-plans/{id}/deny`
 - `POST /api/v1/operator-plans/{id}/resume`
 
-This gives DreamAxis a first-class plan object for multi-step operator work instead of treating every action as an isolated turn.
+This moves DreamAxis away from isolated one-off turns and toward explicit plan state, approvals, resume, and auditability.
 
-### Chat is now the live operator console
+### `/chat` is now the live operator console
 
-`/chat` now emphasizes:
+`/chat` now centers on live execution rather than plain conversation:
 
 - current plan linkage
 - active-step visibility
 - approval prominence
 - execution strip status
 - runtime-backed evidence
+- rich final-message rendering
 
-The goal is that the user can tell what is active, what is waiting, and what failed without reading a raw log stream.
+The result is a surface where operators can tell what is active, what is blocked, what failed, and what evidence was produced without reading raw logs first.
 
 ### `/operator` is now the management surface
 
-`/operator` now acts as the approval and plan-management page, including:
+`/operator` is now the control plane for operator work:
 
 - approval queue
 - active runs
@@ -55,35 +58,41 @@ The goal is that the user can tell what is active, what is waiting, and what fai
 
 ### `/runtime` is now the audit plane
 
-`/runtime` now reads as an audit surface rather than a generic runtime log view, with stronger emphasis on:
+`/runtime` now reads as an audit and lineage surface, with emphasis on:
 
 - execution lineage
 - artifacts
 - verification summaries
 - failure visibility
 - parent/child linkage
+- raw logs preserved as monospace evidence
 
-### Deterministic desktop grounding was extracted
-
-Desktop grounding was split into a dedicated deterministic layer so the executor can consume stable results instead of inlined branching logic.
-
-Stable shared outputs now include:
-
-- `DesktopContextSnapshot`
-- `DesktopTargetResolverResult`
-
-### Operator execution is bounded and reviewable
+### Desktop execution stays bounded and reviewable
 
 The alpha.2 executor now supports:
 
 - ordered inspect / verify / operate / proposal steps
-- approval checkpoints for gated actions
+- approval checkpoints for gated desktop actions
 - bounded reflection
 - bounded retry
 - resume after pause / denial / approval
 - plan-level approval history aggregation
 
+### Rich text v1 now upgrades final outputs
+
+The web surface now includes a shared rich renderer for explanatory text across chat, operator, and runtime:
+
+- Markdown + GFM tables
+- syntax-highlighted code blocks
+- KaTeX math rendering
+- Mermaid diagram rendering
+- local Mermaid failure fallback with visible source
+
+This improves final-message readability without changing backend message schemas or weakening HTML safety.
+
 ## Acceptance summary
+
+### Operator workflow acceptance
 
 Acceptance evidence is recorded in:
 
@@ -109,17 +118,45 @@ Scenario families covered:
    - `verify_repo`
    - `propose_fix`
 
+### Rich text acceptance
+
+Rich text acceptance evidence is recorded in:
+
+- `docs/acceptance/rich-text-v1/acceptance-report.md`
+
+Recorded result:
+
+- fixed-fixture screenshot acceptance completed
+- `13` tracked screenshots captured
+- coverage across chat, operator, runtime, Mermaid fallback, HTML escaping, and narrow viewport rendering
+
+Tracked screenshot set:
+
+- `chat-01-streaming-rich.png`
+- `chat-02-markdown-basics.png`
+- `chat-03-code-highlight.png`
+- `chat-04-math-katex-all-syntax.png`
+- `chat-05-mermaid-success.png`
+- `chat-06-mermaid-fallback-with-src.png`
+- `chat-07-html-escaped.png`
+- `chat-08-narrow-viewport.png`
+- `operator-01-plan-summary-rich.png`
+- `operator-02-failure-summary-rich.png`
+- `runtime-01-execution-summary-rich.png`
+- `runtime-02-approval-summary-rich.png`
+- `runtime-03-raw-logs-monospace.png`
+
 ## Public product shape after alpha.2
 
 DreamAxis is now best understood as:
 
-**a local-first operator workflow platform with approval-gated desktop action lanes and a proposal-only repo copilot lane**
+**a local-first operator workflow platform with approval-gated desktop action lanes, proposal-only repo/code repair, and rich final outputs backed by runtime evidence**
 
 Current visible surfaces:
 
-- `/chat` for live operation
-- `/operator` for approval and plan management
-- `/runtime` for audit and lineage
+- `/chat` = live operator console
+- `/operator` = approvals, queues, templates, and plan management
+- `/runtime` = audit, lineage, artifacts, and execution detail
 
 ## What this release still does not do
 
@@ -131,6 +168,8 @@ Alpha.2 is intentionally **not**:
 - WebSocket/SSE push
 - macOS/Linux parity
 - multi-agent swarm UX
+- WYSIWYG rich-text editing
+- raw HTML rendering in messages
 
 ## Recommended links for the release
 
@@ -140,13 +179,3 @@ Alpha.2 is intentionally **not**:
 - `docs/desktop-runtime-v1.md`
 - `docs/backend-api.md`
 - `CHANGELOG.md`
-
-## Post-release UI evidence follow-up
-
-After the alpha.2 release evidence was finalized, the web surface also gained a tracked rich-text acceptance pack that now serves as the canonical proof for final-message Markdown rendering, KaTeX, Mermaid fallback, and operator/runtime explanatory text formatting.
-
-Use these assets when refreshing public docs or validating that README screenshots still match the current UI:
-
-- route: `/acceptance/rich-text-v1`
-- report: `docs/acceptance/rich-text-v1/acceptance-report.md`
-- screenshots: `docs/acceptance/rich-text-v1/screenshots/`
