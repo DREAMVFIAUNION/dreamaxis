@@ -10,6 +10,9 @@ concurrency:
   group: dreamaxis-web-acceptance-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   rich-text-acceptance:
     name: Rich text acceptance visual
@@ -45,34 +48,103 @@ jobs:
         shell: pwsh
         run: pnpm --filter @dreamaxis/web build
 
-      - name: Start web app
+      - name: Prepare web log paths
         shell: pwsh
         run: |
           $stdout = Join-Path $env:RUNNER_TEMP "dreamaxis-web.out.log"
           $stderr = Join-Path $env:RUNNER_TEMP "dreamaxis-web.err.log"
-          $process = Start-Process -FilePath "pnpm.cmd" -ArgumentList "--filter", "@dreamaxis/web", "start" -WorkingDirectory (Get-Location) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-          "WEB_PID=$($process.Id)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Wait for acceptance route
-        shell: pwsh
-        run: |
-          for ($i = 0; $i -lt 60; $i++) {
-            try {
-              $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3000/acceptance/rich-text-v1
-              if ($response.StatusCode -eq 200) {
-                exit 0
-              }
-            } catch {
-              Start-Sleep -Seconds 2
-            }
-          }
-          throw "Acceptance route did not become ready in time."
+          "WEB_STDOUT=$stdout" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WEB_STDERR=$stderr" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run rich-text acceptance visual check
         shell: pwsh
         env:
           DREAMAXIS_ACCEPTANCE_BASE_URL: http://127.0.0.1:3000
-        run: pnpm acceptance:rich-text
+        run: |
+          $target = "http://127.0.0.1:3000/acceptance/rich-text-v1"
+          $stdout = $env:WEB_STDOUT
+          $stderr = $env:WEB_STDERR
+          $webDir = Join-Path $env:GITHUB_WORKSPACE "apps\\web"
+
+          function Show-LogTail([string]$path, [string]$label) {
+            Write-Host "---- $label (tail) ----"
+            if (Test-Path $path) {
+              Get-Content -Path $path -Tail 40 -ErrorAction SilentlyContinue
+            } else {
+              Write-Host "(missing)"
+            }
+          }
+
+          function Show-LogFull([string]$path, [string]$label) {
+            Write-Host "==== $label (full) ===="
+            if (Test-Path $path) {
+              Get-Content -Path $path -ErrorAction SilentlyContinue
+            } else {
+              Write-Host "(missing)"
+            }
+          }
+
+          $lastStatus = "no-response"
+          $lastError = $null
+          $webProcess = $null
+
+          try {
+            $webProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/c", "pnpm start" -WorkingDirectory $webDir -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            Write-Host "Started web app PID=$($webProcess.Id) in $webDir"
+
+            for ($i = 1; $i -le 60; $i++) {
+              $processAlive = $null -ne (Get-Process -Id $webProcess.Id -ErrorAction SilentlyContinue)
+
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri $target -TimeoutSec 5
+                $lastStatus = [string]$response.StatusCode
+                if ($response.StatusCode -eq 200) {
+                  Write-Host "Acceptance route ready on attempt $i with HTTP 200."
+                  break
+                }
+              } catch {
+                if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+                  $lastStatus = [string][int]$_.Exception.Response.StatusCode
+                } else {
+                  $lastStatus = "request-error"
+                }
+                $lastError = $_.Exception.Message
+              }
+
+              if ($i % 10 -eq 0) {
+                Write-Host "Attempt $i/60 -> status=$lastStatus ; processAlive=$processAlive"
+                if ($lastError) {
+                  Write-Host "Last probe error: $lastError"
+                }
+                Show-LogTail $stdout "web stdout"
+                Show-LogTail $stderr "web stderr"
+                Write-Host "---- netstat :3000 ----"
+                netstat -ano | Select-String ":3000"
+              }
+
+              Start-Sleep -Seconds 2
+            }
+
+            if ($lastStatus -ne "200") {
+              Write-Host "Acceptance route did not become ready in time."
+              Write-Host "Last observed status: $lastStatus"
+              Write-Host "Last observed processAlive: $($null -ne (Get-Process -Id $webProcess.Id -ErrorAction SilentlyContinue))"
+              if ($lastError) {
+                Write-Host "Last probe error: $lastError"
+              }
+              Show-LogFull $stdout "web stdout"
+              Show-LogFull $stderr "web stderr"
+              Write-Host "---- netstat :3000 ----"
+              netstat -ano | Select-String ":3000"
+              throw "Acceptance route did not become ready in time."
+            }
+
+            pnpm acceptance:rich-text
+          } finally {
+            if ($webProcess -and (Get-Process -Id $webProcess.Id -ErrorAction SilentlyContinue)) {
+              Stop-Process -Id $webProcess.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Upload visual artifacts
         if: always()
@@ -90,6 +162,6 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          if ($env:WEB_PID) {
+          if ($env:WEB_PID -and (Get-Process -Id $env:WEB_PID -ErrorAction SilentlyContinue)) {
             Stop-Process -Id $env:WEB_PID -Force -ErrorAction SilentlyContinue
           }

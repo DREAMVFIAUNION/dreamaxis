@@ -58,6 +58,14 @@ async function ensureDirectories() {
   await fs.mkdir(diffDir, { recursive: true });
 }
 
+async function getShotLocator(page, shot) {
+  const targetLocator = page.locator(`[data-shot-target="${shot}"]`);
+  if ((await targetLocator.count()) > 0) {
+    return targetLocator.first();
+  }
+  return page.locator(`[data-shot="${shot}"]`).first();
+}
+
 async function compareShot(shot) {
   const baselinePath = path.join(baselineDir, `${shot}.png`);
   const currentPath = path.join(currentDir, `${shot}.png`);
@@ -119,7 +127,7 @@ async function main() {
 
     const results = [];
     for (const shot of shots) {
-      const locator = page.locator(`[data-shot="${shot}"]`);
+      const locator = await getShotLocator(page, shot);
       await locator.waitFor({ state: "visible" });
       await locator.scrollIntoViewIfNeeded();
       await locator.screenshot({

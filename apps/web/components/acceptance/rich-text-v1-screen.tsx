@@ -3,6 +3,7 @@
 import { PanelCard } from "@/components/cards/panel-card";
 import { StreamMessage } from "@/components/chat/stream-message";
 import { RichContentRenderer } from "@/components/rich-content/rich-content-renderer";
+import { cn } from "@/lib/utils";
 
 type RichTextAcceptanceFixtures = {
   chatStreaming: string;
@@ -19,18 +20,51 @@ type RichTextAcceptanceFixtures = {
   runtimeRawLog: string;
 };
 
-function Shot({ shot, title, children }: { shot: string; title: string; children: React.ReactNode }) {
-  return (
-    <section
-      id={shot}
-      data-shot={shot}
-      className="rounded-2xl border border-white/10 bg-[#111111] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.35)]"
-    >
+const shotFrameClassName = "rounded-2xl border border-white/10 bg-[#111111] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.35)]";
+
+function Shot({
+  shot,
+  title,
+  children,
+  captureTarget = false,
+  targetClassName,
+}: {
+  shot: string;
+  title: string;
+  children: React.ReactNode;
+  captureTarget?: boolean;
+  targetClassName?: string;
+}) {
+  const body = (
+    <>
       <div className="mb-4 border-b border-white/10 pb-3">
         <p className="text-[10px] uppercase tracking-[0.24em] text-signal">{shot}.png</p>
         <h2 className="mt-2 text-lg font-black uppercase tracking-[0.08em] text-ink">{title}</h2>
       </div>
       {children}
+    </>
+  );
+
+  if (captureTarget) {
+    return (
+      <section id={shot} className="flex justify-center">
+        <div
+          data-shot-target={shot}
+          className={cn(shotFrameClassName, "w-[628px] max-w-[628px]", targetClassName)}
+        >
+          {body}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      id={shot}
+      data-shot={shot}
+      className={cn(shotFrameClassName, targetClassName)}
+    >
+      {body}
     </section>
   );
 }
@@ -54,36 +88,36 @@ export function RichTextV1AcceptanceScreen({ fixtures }: { fixtures: RichTextAcc
         </header>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <Shot shot="chat-01-streaming-rich" title="Streaming rich message">
+          <Shot shot="chat-01-streaming-rich" title="Streaming rich message" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatStreaming} pending />
           </Shot>
 
-          <Shot shot="chat-02-markdown-basics" title="Markdown basics">
+          <Shot shot="chat-02-markdown-basics" title="Markdown basics" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatMarkdown} />
           </Shot>
 
-          <Shot shot="chat-03-code-highlight" title="Code highlight coverage">
+          <Shot shot="chat-03-code-highlight" title="Code highlight coverage" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatCode} />
           </Shot>
 
-          <Shot shot="chat-04-math-katex-all-syntax" title="Math / KaTeX coverage">
+          <Shot shot="chat-04-math-katex-all-syntax" title="Math / KaTeX coverage" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatMath} />
           </Shot>
 
-          <Shot shot="chat-05-mermaid-success" title="Mermaid success">
+          <Shot shot="chat-05-mermaid-success" title="Mermaid success" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatMermaidOk} />
           </Shot>
 
-          <Shot shot="chat-06-mermaid-fallback-with-src" title="Mermaid fallback with source">
+          <Shot shot="chat-06-mermaid-fallback-with-src" title="Mermaid fallback with source" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatMermaidBad} />
           </Shot>
 
-          <Shot shot="chat-07-html-escaped" title="Unsafe HTML stays escaped">
+          <Shot shot="chat-07-html-escaped" title="Unsafe HTML stays escaped" captureTarget>
             <StreamMessage role="assistant" content={fixtures.chatHtmlEscape} />
           </Shot>
 
-          <Shot shot="chat-08-narrow-viewport" title="Narrow viewport (375px)">
-            <div className="w-[375px] max-w-full">
+          <Shot shot="chat-08-narrow-viewport" title="Narrow viewport (375px)" captureTarget>
+            <div className="mx-auto w-[375px] max-w-full">
               <StreamMessage role="assistant" content={narrowViewportContent} />
             </div>
           </Shot>
