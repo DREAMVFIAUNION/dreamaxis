@@ -7,6 +7,7 @@ The GitHub README uses tracked documentation assets from:
 - `docs/assets/readme/dreamaxis-dashboard.png`
 - `docs/assets/readme/dreamaxis-chat.png`
 - `docs/assets/readme/dreamaxis-skills.png`
+- `docs/assets/readme/dreamaxis-operator.png`
 - `docs/assets/readme/dreamaxis-knowledge.png`
 - `docs/assets/readme/dreamaxis-runtime.png`
 - `docs/assets/readme/dreamaxis-icon.png`
@@ -21,9 +22,10 @@ Recommended README order:
 
 1. `dreamaxis-dashboard.png`
 2. `dreamaxis-skills.png`
-3. `dreamaxis-runtime.png`
-4. `dreamaxis-knowledge.png`
-5. `dreamaxis-chat.png`
+3. `dreamaxis-operator.png`
+4. `dreamaxis-runtime.png`
+5. `dreamaxis-knowledge.png`
+6. `dreamaxis-chat.png`
 
 ## Acceptance source screenshots
 
@@ -34,6 +36,9 @@ Fresh UI acceptance captures are still generated locally in:
 - `artifacts/acceptance/dreamaxis-skills.png`
 - `artifacts/acceptance/dreamaxis-knowledge.png`
 - `artifacts/acceptance/dreamaxis-runtime.png`
+- `artifacts/acceptance/alpha2-chat-approval.png`
+- `artifacts/acceptance/alpha2-operator-queue.png`
+- `artifacts/acceptance/alpha2-runtime-audit.png`
 
 Because `artifacts/` stays gitignored, those files are **not** the source used by the public README.
 
@@ -48,6 +53,7 @@ These acceptance exports are the preferred source for:
 - `dreamaxis-dashboard.png` - control-center overview
 - `dreamaxis-chat.png` - conversation lane / stream UI
 - `dreamaxis-skills.png` - skill pack and execution surface
+- `dreamaxis-operator.png` - operator approval queue, active runs, and plan control surface
 - `dreamaxis-knowledge.png` - documents, packs, and sources view
 - `dreamaxis-runtime.png` - runtime/session/execution console
 
@@ -71,6 +77,9 @@ Try to keep screenshots:
 
 Latest refresh notes:
 
+- `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-operator.png` added from `artifacts/acceptance/alpha2-operator-queue.png` to represent the alpha.2 approval queue and active-run management surface
+- `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed from `artifacts/acceptance/alpha2-chat-approval.png` and now centers the public chat surface on active-step focus, approval prominence, and operator-linked runtime evidence
+- `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-runtime.png` refreshed from `artifacts/acceptance/alpha2-runtime-audit.png` and now centers the public runtime surface on audit-plane lineage, artifacts, and verification summaries
 - `2026-03-25`: `artifacts/acceptance/dreamaxis-chat.png` refreshed to the desktop-first operator-console view with visible grounded target selection, approval state, runtime linkage, and approved desktop action evidence
 - `2026-03-25`: README canonical `docs/assets/readme/dreamaxis-chat.png` refreshed from the latest desktop host validation run and now anchors the public chat surface on grounded desktop control instead of repo-only troubleshooting
 - `2026-03-25`: `artifacts/acceptance/dreamaxis-runtime.png` refreshed to a desktop execution-detail view with selected execution, parent linkage, action timeline, and runtime artifacts

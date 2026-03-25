@@ -46,8 +46,11 @@ DreamAxis is designed around four simple defaults:
 
 Latest local acceptance baseline:
 
+- **v0.3.0-alpha.2 operator workflow:** `9/9` scenarios passed across inspect desktop, verify browser, operate with approval, triad summary, failure reflection narrowing, and repo non-regression lanes
 - **v0.2 chat-first repo copilot:** `8/8` scenarios passed
 - **NVIDIA Build provider validation:** `9/9` scenarios passed
+- **operator workflow core:** multi-step OperatorPlan execution, approval queue handling, bounded reflection, deterministic desktop grounding, and resume are now validated end to end
+- **operator surfaces:** `/chat`, `/operator`, and `/runtime` now divide cleanly into live operation, approval management, and deep audit
 - **grounded verify / troubleshoot loop:** grounded targets, reflection-aware follow-up, failure summaries, stderr highlights, and grounded next-step reasoning are now rendered in chat-first verify / troubleshoot flows
 - **Windows host desktop runtime:** inspect, verify, and approval-gated operate flows validated with real `focus_window`, `launch_app`, `press_hotkey`, `type_text`, and `click` actions
 - validated across:
@@ -62,6 +65,7 @@ Latest local acceptance baseline:
 
 See:
 
+- [docs/acceptance-report-alpha2.md](./docs/acceptance-report-alpha2.md)
 - [docs/chat-acceptance-report-v0.2.md](./docs/chat-acceptance-report-v0.2.md)
 - [docs/chat-acceptance-report-nvidia.md](./docs/chat-acceptance-report-nvidia.md)
 - [docs/repo-copilot-runbook.md](./docs/repo-copilot-runbook.md)
@@ -77,15 +81,15 @@ See:
 
 ### Product surfaces
 
-| Skills | Runtime |
-|---|---|
-| ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
-| Skill packs, execution entrypoints, and capability-aware actions. | Runtime hosts, CLI/browser/desktop execution bundles, child executions, and audit-ready trails back to chat turns. |
+| Skills | Operator | Runtime |
+|---|---|---|
+| ![DreamAxis Skills](docs/assets/readme/dreamaxis-skills.png) | ![DreamAxis Operator](docs/assets/readme/dreamaxis-operator.png) | ![DreamAxis Runtime](docs/assets/readme/dreamaxis-runtime.png) |
+| Skill packs, execution entrypoints, and capability-aware actions. | Approval queue, active runs, templates, and plan-level controls for operator-managed execution. | Runtime hosts, operator lineage, verification summaries, artifact-first audit, and child execution trails back to chat turns. |
 
 | Knowledge | Chat |
 |---|---|
 | ![DreamAxis Knowledge](docs/assets/readme/dreamaxis-knowledge.png) | ![DreamAxis Chat](docs/assets/readme/dreamaxis-chat.png) |
-| Builtin packs, uploaded documents, and retrieval-ready assets. | Desktop-first grounded control console with visible targets, approval gates, approved desktop actions, runtime evidence, and proposal-only repo repair guidance. |
+| Builtin packs, uploaded documents, and retrieval-ready assets. | Operator-first chat console with active-step emphasis, approval prominence, runtime evidence, and proposal-only repo repair guidance. |
 
 See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot index and refresh rules.
 
@@ -109,6 +113,8 @@ See [docs/screenshots.md](./docs/screenshots.md) for the canonical screenshot in
 - run Playwright-backed browser skills and capture artifacts
 - inspect the Windows desktop surface through the host desktop runtime
 - execute approval-gated desktop actions with runtime-backed audit trails
+- manage OperatorPlan approvals and active runs from `/operator`
+- follow active-step state in `/chat` and deep lineage in `/runtime`
 - review runtime hosts, sessions, executions, and outputs in one place
 - use chat-first verify / troubleshoot flows with grounded targets, reflection-aware follow-up, and runtime-backed failure summaries instead of black-box answers
 
@@ -223,6 +229,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 
 - `/dashboard`
 - `/chat/[conversationId]`
+- `/operator`
 - `/skills`
 - `/knowledge`
 - `/runtime`
@@ -236,6 +243,7 @@ DreamAxis does **not** require a hosted account system for the default path.
 - [docs/development.md](./docs/development.md)
 - [docs/deployment-modes.md](./docs/deployment-modes.md)
 - [docs/browser-runtime.md](./docs/browser-runtime.md)
+- [docs/acceptance-report-alpha2.md](./docs/acceptance-report-alpha2.md)
 - [docs/desktop-runtime-v1.md](./docs/desktop-runtime-v1.md)
 - [docs/skill-packs.md](./docs/skill-packs.md)
 - [docs/knowledge-packs.md](./docs/knowledge-packs.md)

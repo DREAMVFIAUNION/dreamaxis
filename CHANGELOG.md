@@ -11,6 +11,62 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0
 - v0.3 desktop-operator roadmap docs and motion-console direction
 - desktop-first product positioning and dual-lane repo/desktop planning
 
+## [0.3.0-alpha.2] - 2026-03-25
+
+### Added
+
+- OperatorPlan alpha.2 workflow surface:
+  - `POST /api/v1/operator-plans`
+  - `GET /api/v1/operator-plans`
+  - `GET /api/v1/operator-plans/{id}`
+  - `POST /api/v1/operator-plans/{id}/approve`
+  - `POST /api/v1/operator-plans/{id}/deny`
+  - `POST /api/v1/operator-plans/{id}/resume`
+- deterministic desktop grounding extraction with stable `DesktopContextSnapshot` and `DesktopTargetResolverResult` outputs
+- grounded multi-step operator executor with:
+  - ordered inspect / verify / operate / proposal steps
+  - approval checkpoints for gated desktop actions
+  - bounded helper reflection (`MAX_HELPER_REFLECTIONS = 1`)
+  - bounded retry (`MAX_STEP_RETRIES = 1`)
+  - resume support from paused / denied / pending approval states
+  - plan-level approval history aggregation
+- reusable alpha.2 acceptance runner:
+  - `scripts/run_alpha2_acceptance.py`
+- release evidence docs:
+  - `docs/acceptance-report-alpha2.md`
+  - `docs/github-release-v0.3.0-alpha.2.md`
+
+### Changed
+
+- `/chat` now reads as an operator console with:
+  - active-step emphasis
+  - approval banner prominence
+  - operator strip status
+  - direct linkage back to operator plans
+- `/runtime` now emphasizes audit-first operator lineage, verification evidence, and compressed raw output over generic log streaming
+- `/operator` now acts as a management surface for approval queue, active runs, plan inspection, and template-driven starts
+- operator-plan creation now eagerly loads the conversation provider connection to avoid async lazy-load failures during plan bootstrap
+- README and canonical screenshots now reflect the alpha.2 operator queue, approval-gated chat flow, and runtime audit plane
+
+### Validated
+
+- `python -m compileall apps/api/app apps/desktop-worker/app`
+- `pnpm --filter @dreamaxis/web build`
+- alpha.2 acceptance baseline: `9/9` scenarios passed across 6 scenario families
+- validated operator scenarios:
+  - inspect desktop
+  - verify browser
+  - operate with approval
+  - browser + terminal + VS Code triad
+- validated repo scenarios:
+  - failure + reflection narrowing
+  - understand repo
+  - inspect repo
+  - verify repo
+  - propose fix
+- proposal-only repo/code behavior remained intact during alpha.2 acceptance
+- acceptance evidence recorded in `docs/acceptance-report-alpha2.md`
+
 ## [0.2.0-preview] - 2026-03-25
 
 ### Added
