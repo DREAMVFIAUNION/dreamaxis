@@ -10,6 +10,9 @@ concurrency:
   group: dreamaxis-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   python-compile:
     name: Python compile
@@ -124,7 +127,7 @@ jobs:
 
           for i in {1..40}; do
             if curl -fsS -H "Authorization: Bearer $DREAMAXIS_TOKEN" http://localhost:8000/api/v1/runtimes > /tmp/dreamaxis-runtimes.json; then
-              if python -c "import json, pathlib; payload=json.loads(pathlib.Path('/tmp/dreamaxis-runtimes.json').read_text(encoding='utf-8')); items=payload['data']; types={item['runtime_type']: item['status'] for item in items}; assert types.get('cli')=='online', types; assert types.get('browser')=='online', types"
+              if python -c "import json, pathlib, sys; payload=json.loads(pathlib.Path('/tmp/dreamaxis-runtimes.json').read_text(encoding='utf-8')); items=payload['data']; types={item['runtime_type']: item['status'] for item in items}; required=('desktop','cli','browser'); unhealthy={'offline','error','fatal','unknown','missing'}; print('Runtime registry snapshot:'); [print(f'  - {component} -> {types[component]}') for component in sorted(types)]; failures=[]; [failures.append(f'{component} -> {types.get(component, \"missing\")} (explicitly unhealthy)') if types.get(component, 'missing') in unhealthy else failures.append(f'{component} -> {types.get(component, \"missing\")} (expected an online* healthy state)') if not str(types.get(component, 'missing')).startswith('online') else None for component in required]; print('Runtime registry check failed:') if failures else print('Runtime registry check passed.'); [print(f'  - {failure}') for failure in failures]; sys.exit(1 if failures else 0)"
               then
                 exit 0
               fi
