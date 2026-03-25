@@ -5,6 +5,7 @@ This folder contains the English-first public launch copy for DreamAxis.
 ## Included assets
 
 - `release-announcement.md` - GitHub release/discussion announcement copy
+- `release-announcement-v0.2.0-preview.md` - desktop-operator update announcement copy
 - `x-short-post.md` - single short X/Twitter launch post
 - `x-thread.md` - longer launch thread
 - `community-launch-post.md` - longer post for forums, Discord, Reddit, or Hacker News-style sharing
@@ -12,6 +13,7 @@ This folder contains the English-first public launch copy for DreamAxis.
 - `seeded-issues.md` - first public issue seeds aligned with `v0.1.x polish`
 - `csdn-build-log-tutorial.md` - Chinese build-log/tutorial draft for CSDN-style publication
 - `csdn-publish-checklist.md` - pre-publish checklist for Chinese article rollout and screenshot review
+- `../github-release-v0.2.0-preview.md` - GitHub release note draft for the current desktop-operator preview
 
 ## Positioning rules
 
